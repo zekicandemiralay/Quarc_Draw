@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Quarc Draw</string>
+    <string name="title_activity_main">Quarc Draw</string>
+    <string name="package_name">com.quarc.draw</string>
+    <string name="custom_url_scheme">com.quarc.draw</string>
+</resources>

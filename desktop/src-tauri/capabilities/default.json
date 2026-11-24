@@ -1,0 +1,14 @@
+{
+  "identifier": "default",
+  "description": "Default capability for the main window. Quarc Draw carries its own copy of the page (the window shows the bundled app, not a server), so this is the app's own origin: opening links, the native Save dialog, and the Quarc Store sign-in commands.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "shell:allow-open",
+    "dialog:allow-save",
+    "fs:allow-write-file",
+    "allow-quarc-sso-peek",
+    "allow-quarc-sso-sync",
+    "allow-quarc-sso-open-store"
+  ]
+}

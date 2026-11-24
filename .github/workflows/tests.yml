@@ -1,0 +1,73 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  unit:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Backend (the Quarc login, accounts, documents, revisions, CORS, live updates)
+        working-directory: backend
+        run: npm test
+
+      - name: Frontend (type-check, then geometry, colour, filters, selection, history, SVG paths, shape recognition)
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+
+      - name: Production build
+        working-directory: frontend
+        run: npx vite build
+
+  browser:
+    # The real backend (development login) + the production build + the Chrome preinstalled on GitHub runners.
+    runs-on: ubuntu-22.04
+    needs: unit
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build the app
+        working-directory: frontend
+        run: |
+          npm ci
+          npx vite build
+
+      - name: Browser tests
+        working-directory: frontend
+        run: node tests/e2e/run.mjs
+
+      - name: Screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: frontend/tests/e2e/out
+          if-no-files-found: ignore
+
+  desktop-windows:
+    # The Windows app: the Store sign-in commands and their rules.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri -> target
+
+      - name: Windows app — Store sign-in rules
+        working-directory: desktop/src-tauri
+        run: cargo test

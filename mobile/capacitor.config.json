@@ -1,0 +1,9 @@
+{
+  "appId": "com.quarc.draw",
+  "appName": "Quarc Draw",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#121417"
+  }
+}

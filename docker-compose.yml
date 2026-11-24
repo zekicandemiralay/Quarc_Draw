@@ -1,0 +1,49 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    volumes:
+      # Every account's documents live here (users/<hash>/docs/*.qdraw + index.json).
+      - draw_data:/app/data
+    environment:
+      - PORT=3009
+      - QUARC_DATA=/app/data
+      # Must be the same secret as quarc-auth and every other Quarc app (see .env.example). No default on purpose:
+      # a wrong secret would silently reject every login.
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is not set - copy .env from another Quarc app (see .env.example)}
+      # Must match quarc-auth's own SECURE_COOKIE: it decides the flags of a renewed login cookie.
+      - SECURE_COOKIE=${SECURE_COOKIE:-true}
+      # Largest single document in MB (nginx accepts up to 640 MB).
+      - QUARC_MAX_MB=${QUARC_MAX_MB:-512}
+      # Extra browser origins that may call the API with the login cookie (comma separated). The Android and Windows
+      # apps and this server's own host name are always allowed.
+      - QUARC_ORIGINS=${QUARC_ORIGINS:-}
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "4009:443"
+    volumes:
+      - /var/lib/tailscale/certs:/etc/nginx/ssl:ro
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - app-network
+      # Lets nginx reach the quarc-auth container by name for /api/auth/*.
+      - quarcnet-shared
+
+networks:
+  app-network:
+    driver: bridge
+  quarcnet-shared:
+    external: true
+
+volumes:
+  draw_data:
