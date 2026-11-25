@@ -134,7 +134,7 @@ export function OptionsBar({ ed }: { ed: Editor }) {
         break;
       case 'text': body = <TextOptions ed={ed} />; break;
       case 'hand': case 'zoom': case 'rotate-view':
-        body = (<><button className="btn sm" onClick={() => ed.zoomTo(1)}>100%</button><button className="btn sm" onClick={() => ed.fitPage()}>Fit page</button><button className="btn sm" onClick={() => ed.fitWidth()}>Fit width</button><button className="btn sm" onClick={() => { ed.view.resetRotation(); ed.changed('view'); }}>Reset rotation</button></>);
+        body = (<><button className="btn sm" onClick={() => ed.zoomTo(1)}>100%</button><button className="btn sm" onClick={() => ed.fitPage()}>Fit page</button><button className="btn sm" onClick={() => ed.fitWidth()}>Fit width</button><button className="btn sm" title="Back to upright (Shift+R)" onClick={() => ed.resetViewRotation()}>Upright</button><button className="btn sm" title="Turn the view a quarter turn" onClick={() => runCommand('view.rotate90')}>Rotate 90°</button>{toolId === 'rotate-view' && <span className="hint">Drag to turn the view · it sticks at upright and quarter turns · Shift = 15° steps</span>}</>);
         break;
       case 'measure': body = <span className="hint">Drag to measure distance and angle</span>; break;
       case 'image': body = <span className="hint">Click the page to choose an image</span>; break;

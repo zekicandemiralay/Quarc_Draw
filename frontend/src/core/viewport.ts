@@ -4,6 +4,23 @@ import type { Mat, Rect, Vec } from './geometry';
 import { clamp, mApply, mInvert, mMul, mRotate, mScale, mTranslate, rad, transformRectBounds, rectIntersects } from './geometry';
 import type { Page, PageLayout, QDocument } from './model';
 
+/** an angle in (-π, π] */
+export const normAngle = (a: number) => { const t = (((a + Math.PI) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; return t === -Math.PI ? Math.PI : t; };
+/** a pinch must twist at least this much before it starts turning the view (so zooming alone never tilts it) */
+export const ROTATE_ENGAGE = rad(10);
+/**
+ * View rotation with "detents": close to upright the view sticks to exactly 0°, and a little more gently to 90° / 180° / 270°,
+ * so getting back to normal by hand is easy. Returns the angle to use and whether it sits in a detent.
+ */
+/** a tiny tick of the vibration motor when the view clicks into a detent (Android; ignored elsewhere) */
+export const detentTick = () => { try { navigator.vibrate?.(8); } catch { /* not allowed here */ } };
+
+export function stickyRotation(raw: number): { rot: number; snapped: boolean } {
+  const a = normAngle(raw), q = Math.PI / 2, k = Math.round(a / q), d = Math.abs(a - k * q);
+  if (d < (k === 0 ? rad(8) : rad(5))) return { rot: normAngle(k * q), snapped: true };
+  return { rot: a, snapped: false };
+}
+
 export const MIN_ZOOM = 0.02;
 export const MAX_ZOOM = 64;
 const PAGE_GAP = 40;

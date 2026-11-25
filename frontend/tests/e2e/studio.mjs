@@ -232,4 +232,53 @@ export async function studio({ page, rep, shot, assert, helpers: h }) {
     await shot('19-rotated');
     await h.cmd(page, 'view.rotatereset'); await h.cmd(page, 'view.fit');
   });
+  await rep.step('view rotation sticks to upright (rotate tool and two-finger twist), Shift+R turns it back, New offers Portrait', async () => {
+    const deg = () => h.ev(page, (ed) => Math.round((ed.view.rotation * 180) / Math.PI * 10) / 10);
+    await h.ev(page, (ed) => { ed.resetViewRotation(false); ed.fitPage(); ed.setTool('rotate-view'); });
+    const box = await page.locator('.viewport').boundingBox(), cx = box.x + box.width / 2, cy = box.y + box.height / 2, R = 220;
+    const onCircle = (d) => [cx + R * Math.cos((d * Math.PI) / 180), cy + R * Math.sin((d * Math.PI) / 180)];
+    // the Rotate View tool: a small turn stays upright, a big one turns, coming back near upright clicks into place
+    await page.mouse.move(...onCircle(0)); await page.mouse.down();
+    for (let d = 1; d <= 6; d++) await page.mouse.move(...onCircle(d));
+    assert((await deg()) === 0, `a 6° turn sticks at upright (got ${await deg()}°)`);
+    for (let d = 7; d <= 40; d++) await page.mouse.move(...onCircle(d));
+    const turned = await deg();
+    assert(turned > 35 && turned < 45, `a 40° turn turns the view (got ${turned}°)`);
+    for (let d = 39; d >= 5; d--) await page.mouse.move(...onCircle(d));
+    assert((await deg()) === 0, `back within a few degrees it is exactly upright again (got ${await deg()}°)`);
+    await page.mouse.up();
+    // Shift+R: animated back to upright from anywhere
+    await h.ev(page, (ed) => { ed.view.rotateAt({ x: ed.view.width / 2, y: ed.view.height / 2 }, 1.1); ed.changed('view'); });
+    await page.waitForSelector('.viewport-chip button.upright');
+    await page.keyboard.press('Shift+R'); await page.waitForTimeout(450);
+    assert((await deg()) === 0, `Shift+R animates back to upright (got ${await deg()}°)`);
+    assert((await page.locator('.viewport-chip button.upright').count()) === 0, 'the "rotated" pill disappears when upright');
+    // two fingers: pinch-zooming alone never tilts; a deliberate twist turns; turning back clicks into upright
+    await h.ev(page, (ed) => ed.setTool('hand')); await page.waitForTimeout(800); // (palm rejection ignores touches right after a pen)
+    const twist = await page.evaluate(async ([cx, cy]) => {
+      const el = document.querySelector('canvas.overlay'), ed = window.__quarc.ed, R = 160, out = {};
+      const ev = (type, id, d) => { const a = ((d + (id === 42 ? 0 : 180)) * Math.PI) / 180; el.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: id, pointerType: 'touch', isPrimary: id === 41, clientX: cx + R * Math.cos(a), clientY: cy + R * Math.sin(a), pressure: type === 'pointerup' ? 0 : 0.5, buttons: type === 'pointerup' ? 0 : 1, button: 0 })); };
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const rot = () => Math.round((ed.view.rotation * 180) / Math.PI * 10) / 10;
+      ev('pointerdown', 41, 0); ev('pointerdown', 42, 0); await wait(120);
+      for (let d = 1; d <= 6; d++) { ev('pointermove', 41, d); ev('pointermove', 42, d); await wait(8); }
+      out.small = rot();
+      for (let d = 7; d <= 45; d++) { ev('pointermove', 41, d); ev('pointermove', 42, d); await wait(8); }
+      out.big = rot();
+      for (let d = 44; d >= 13; d--) { ev('pointermove', 41, d); ev('pointermove', 42, d); await wait(8); }
+      out.back = rot();
+      await wait(200); ev('pointerup', 41, 13); ev('pointerup', 42, 13);
+      return out;
+    }, [cx, cy]);
+    assert(twist.small === 0, `a 6° two-finger twist does not tilt the view (got ${twist.small}°)`);
+    assert(twist.big > 28 && twist.big < 40, `a deliberate twist turns it (got ${twist.big}°)`);
+    assert(twist.back === 0, `twisting back near upright clicks into place (got ${twist.back}°)`);
+    // New: a Portrait switch swaps the size
+    await h.cmd(page, 'file.new'); await page.waitForSelector('.dialog');
+    await page.click('.dialog .seg button:has-text("Portrait")'); await page.waitForTimeout(100);
+    const wh = [await page.inputValue('.dialog .input.num >> nth=0'), await page.inputValue('.dialog .input.num >> nth=1')];
+    assert(wh[0] === '1080' && wh[1] === '1920', `Portrait turns 1920 × 1080 into 1080 × 1920 (got ${wh.join(' × ')})`);
+    await page.click('.dialog-f .btn:has-text("Cancel")');
+  });
+
 }

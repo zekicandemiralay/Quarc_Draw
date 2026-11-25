@@ -351,6 +351,22 @@ export class Editor {
     if (isFinite(x0)) this.view.fitRect({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
     this.changed('view');
   }
+  /** Turn the view back to upright (and un-flip it), animated so you see where it went. */
+  resetViewRotation(animate = true) {
+    const v = this.view, from = v.rotation, flip = v.flipX;
+    if (flip) v.flipX = false;
+    if (Math.abs(from) < 1e-6) { if (flip) this.changed('view'); return; }
+    const c = { x: v.width / 2, y: v.height / 2 };
+    if (!animate || typeof requestAnimationFrame !== 'function') { v.rotateAt(c, 0); this.changed('view'); return; }
+    const t0 = performance.now(), ms = 220;
+    const step = (now: number) => {
+      const t = Math.min(1, (now - t0) / ms), e = 1 - (1 - t) ** 3;
+      v.rotateAt(c, from * (1 - e));
+      this.changed('view');
+      if (t < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
   zoomTo(z: number, anchor?: Vec) {
     this.view.zoomAt(anchor ?? { x: this.view.width / 2, y: this.view.height / 2 }, z);
     this.changed('view');

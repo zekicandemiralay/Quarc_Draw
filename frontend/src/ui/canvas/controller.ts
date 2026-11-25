@@ -6,6 +6,7 @@ import type { Vec } from '../../core/geometry';
 import type { Tool, ToolPointer } from '../../tools/tool';
 import { prefs } from '../../app/store';
 import { bus } from '../../app/bus';
+import { normAngle, stickyRotation, detentTick, ROTATE_ENGAGE } from '../../core/viewport';
 
 const BRUSH_FAMILY = new Set(['brush', 'smudge', 'blur', 'sharpen', 'dodge', 'burn']);
 
@@ -14,7 +15,7 @@ interface Active { id: number; tool: Tool; page: Page | null; pan: boolean; temp
 export class CanvasController {
   private pts = new Map<number, { x: number; y: number; type: string; t: number }>();
   private active: Active | null = null;
-  private gesture: { dist: number; zoom: number; angle: number; rot: number; cx: number; cy: number; start: number; moved: number; fingers: number } | null = null;
+  private gesture: { dist: number; zoom: number; angle: number; rot: number; cx: number; cy: number; start: number; moved: number; fingers: number; raw: number; twist: number; engaged: boolean; snapped: boolean } | null = null;
   private lastPen = 0;
   private lastClick = { t: 0, x: 0, y: 0, n: 0 };
   private onAll: [string, (e: any) => void][] = [];
@@ -178,6 +179,7 @@ export class CanvasController {
     this.gesture = {
       dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, zoom: this.ed.view.zoom, angle: Math.atan2(b.y - a.y, b.x - a.x), rot: this.ed.view.rotation,
       cx: (a.x + b.x) / 2 - r.left, cy: (a.y + b.y) / 2 - r.top, start: performance.now(), moved: 0, fingers: touches.length,
+      raw: this.ed.view.rotation, twist: 0, engaged: false, snapped: stickyRotation(this.ed.view.rotation).snapped,
     };
   }
   private updateGesture() {
@@ -191,7 +193,15 @@ export class CanvasController {
     g.moved += Math.abs(cx - g.cx) + Math.abs(cy - g.cy) + Math.abs(dist - g.dist);
     v.panBy(cx - g.cx, cy - g.cy);
     v.zoomAt({ x: cx, y: cy }, v.zoom * (dist / g.dist));
-    v.rotateAt({ x: cx, y: cy }, v.rotation + (angle - g.angle));
+    // rotation: only after a deliberate twist, then free — except near upright / quarter turns, where it sticks
+    const da = normAngle(angle - g.angle);
+    if (g.engaged) g.raw += da; else if (Math.abs((g.twist += da)) > ROTATE_ENGAGE) g.engaged = true;
+    if (g.engaged) {
+      const s = stickyRotation(g.raw);
+      if (s.snapped && !g.snapped) detentTick();
+      g.snapped = s.snapped;
+      if (Math.abs(normAngle(s.rot - v.rotation)) > 1e-9) v.rotateAt({ x: cx, y: cy }, s.rot);
+    }
     g.dist = dist; g.angle = angle; g.cx = cx; g.cy = cy;
     this.ed.syncActivePageToView();
     this.ed.changed('view');

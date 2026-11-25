@@ -219,7 +219,7 @@ reg(
   C('view.fitall', 'Show all pages', 'View', ({ ed }) => ed?.fitAll(), { enabled: has }),
   C('view.100', 'Actual size (100%)', 'View', ({ ed }) => ed?.zoomTo(1), { keys: 'Ctrl+1', enabled: has }),
   C('view.200', 'Zoom 200%', 'View', ({ ed }) => ed?.zoomTo(2), { keys: 'Ctrl+2', enabled: has }),
-  C('view.rotatereset', 'Reset view rotation', 'View', ({ ed }) => { ed?.view.resetRotation(); ed?.changed('view'); }, { enabled: has }),
+  C('view.rotatereset', 'Back to upright (reset view rotation)', 'View', ({ ed }) => ed?.resetViewRotation(), { keys: 'Shift+R', enabled: has }),
   C('view.rotate90', 'Rotate view 90°', 'View', ({ ed }) => { if (ed) { ed.view.rotateAt({ x: ed.view.width / 2, y: ed.view.height / 2 }, ed.view.rotation + Math.PI / 2); ed.changed('view'); } }, { enabled: has }),
   C('view.flip', 'Flip view horizontally', 'View', ({ ed }) => { if (ed) { ed.view.flipX = !ed.view.flipX; ed.changed('view'); } }, { enabled: has, checked: (c) => !!c.ed?.view.flipX }),
   C('view.rulers', 'Rulers', 'View', () => prefs.set((p) => ({ showRulers: !p.showRulers })), { keys: 'Ctrl+R', checked: () => prefs.get().showRulers }),

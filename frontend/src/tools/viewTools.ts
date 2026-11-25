@@ -1,6 +1,7 @@
 // View navigation tools: hand (pan), zoom, rotate view.
 
 import { Tool, ToolPointer } from './tool';
+import { normAngle, stickyRotation, detentTick } from '../core/viewport';
 import type { Vec } from '../core/geometry';
 
 export class HandTool extends Tool {
@@ -41,15 +42,17 @@ export class RotateViewTool extends Tool {
   private startAngle = 0;
   private startRot = 0;
   private active = false;
+  private snapped = false;
   private ang(p: Vec) { const c = { x: this.ed.view.width / 2, y: this.ed.view.height / 2 }; return Math.atan2(p.y - c.y, p.x - c.x); }
   pointerDown(e: ToolPointer) { this.active = true; this.startAngle = this.ang(e.screen); this.startRot = this.ed.view.rotation; }
   pointerMove(e: ToolPointer) {
     if (!this.active) return;
-    let r = this.startRot + (this.ang(e.screen) - this.startAngle);
+    let r = this.startRot + normAngle(this.ang(e.screen) - this.startAngle);
     if (e.shift) r = Math.round(r / (Math.PI / 12)) * (Math.PI / 12); // snap to 15°
+    else { const s = stickyRotation(r); if (s.snapped && !this.snapped) detentTick(); this.snapped = s.snapped; r = s.rot; }
     this.ed.view.rotateAt({ x: this.ed.view.width / 2, y: this.ed.view.height / 2 }, r);
     this.ed.changed('view');
   }
   pointerUp() { this.active = false; }
-  keyDown(e: KeyboardEvent) { if (e.key === 'Escape') { this.ed.view.resetRotation(); this.ed.changed('view'); return true; } return false; }
+  keyDown(e: KeyboardEvent) { if (e.key === 'Escape') { this.ed.resetViewRotation(); return true; } return false; }
 }

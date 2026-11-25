@@ -11,7 +11,7 @@ Quarc Draw is a single web app (TypeScript · React · Canvas 2D) that runs in a
 
 Notes and PDF reading live in their own Quarc apps (Quarc Notes, Quarc Reader); Quarc Draw is only for drawing.
 
-The picture on the home screen and in the About box, *Harbour at Dusk*, is an oil painting made **inside Quarc Draw** — a script drives the real app with pen events, so every stroke comes from its own Oil Bristle brush and layers (see [art/README.md](art/README.md); *Preferences* can hide it).
+The pictures on the home screen and in the About box — *Harbour at Dusk* and *Sunflowers*, a different one each time the app opens — are oil paintings made **inside Quarc Draw** — a script drives the real app with pen events, so every stroke comes from its own Oil Bristle brush and layers (see [art/README.md](art/README.md); *Preferences* can hide them).
 
 ## Features
 
@@ -135,8 +135,8 @@ Tag `vX.Y.Z` and push the tag: GitHub Actions builds the Windows, macOS and Linu
 
 ## Keyboard & input
 
-`Ctrl+K` command palette · `F1` all shortcuts (rebindable) · `V` move · `B` brush · `E` eraser · `M` marquee · `L` lasso · `W` wand · `G` bucket · `P` pen · `T` text · `I` eyedropper · `Space`-drag pan · `[` `]` brush size · `X` swap colours · `Ctrl+Z / Ctrl+Shift+Z` undo / redo · `Ctrl+T` free transform · `Ctrl+Shift+E` export.
-Touch & pen: pinch to zoom/rotate, two-finger tap = undo, three-finger tap = redo, optional **pen-only** mode and **palm rejection**, pressure curve in *Preferences*.
+`Ctrl+K` command palette · `F1` all shortcuts (rebindable) · `V` move · `B` brush · `E` eraser · `M` marquee · `L` lasso · `W` wand · `G` bucket · `P` pen · `T` text · `I` eyedropper · `Space`-drag pan · `[` `]` brush size · `X` swap colours · `Ctrl+Z / Ctrl+Shift+Z` undo / redo · `Ctrl+T` free transform · `Ctrl+Shift+E` export · `Shift+R` back to upright.
+Touch & pen: pinch to zoom; twist with two fingers to rotate (only a deliberate twist turns the view, and it clicks into place at upright and at quarter turns — the pill on the canvas or `Shift+R` turns it back); two-finger tap = undo, three-finger tap = redo, optional **pen-only** mode and **palm rejection**, pressure curve in *Preferences*. New drawings can be Landscape or Portrait; *Image ▸ Rotate 90°* turns an existing one.
 
 ## Project layout
 
@@ -168,7 +168,7 @@ Design notes: vector objects are immutable and raster surfaces are shared by ref
 cd backend && npm test                       # 12 tests: the Quarc login, accounts, revisions, CORS, live updates
 cd frontend
 npm run typecheck
-npm test                                     # 32 unit tests (geometry, colour, filters, selection, flood fill, history, SVG paths, transform box…)
+npm test                                     # 36 unit tests (geometry, colour, filters, selection, flood fill, history, SVG paths, transform box, view rotation…)
 npm run build && npm run test:e2e            # browser end-to-end suite (needs Edge or Chrome installed)
 ```
 

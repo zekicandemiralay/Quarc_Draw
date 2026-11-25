@@ -1,9 +1,9 @@
-// Paints "Harbour at Dusk" inside the real app (see scripts/artwork/painter.js) and saves it.
-//   npm run build && node scripts/paint-artwork.mjs [phase,phase,…] [--final] [--out <dir>]
-// Phases: sky, clouds, sun, land, sea, boat, rocks, glaze (default: all). A downscaled preview of the canvas is written
-// after every phase. With --final the finished picture is exported through the app's own Export dialog:
-//   <out>/harbour-at-dusk.qdraw  the layered project      <out>/harbour-at-dusk.png  full size 2560 × 1440
-//   <out>/hero.webp              1920 × 1080 for the app's home screen and About box
+// Paints a picture inside the real app (scripts/artwork/kit.js + scripts/artwork/<piece>.js) and saves it.
+//   npm run build && node scripts/paint-artwork.mjs [--piece harbour-at-dusk|sunflowers] [phase,phase,…] [--final] [--web] [--out <dir>]
+// Every phase of the piece runs by default; a downscaled preview of the canvas is written after each one. With --final the
+// finished picture is exported through the app's own Export dialog: <out>/<piece>.qdraw (the layered project) and
+// <out>/<piece>.png (full size). --web also writes <out>/<piece>.webp (1920 px on the long side) — the copy the app shows on its
+// home screen and in the About box (it goes to frontend/public/art/ and into src/ui/paintings.ts).
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,12 +13,11 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const flag = (n) => args.includes(n);
 const val = (n, d) => (args.includes(n) ? args[args.indexOf(n) + 1] : d);
-const ALL = ['sky', 'clouds', 'sun', 'land', 'sea', 'boat', 'rocks', 'glaze'];
-const phases = (args.find((a) => !a.startsWith('--') && ALL.includes(a.split(',')[0])) || ALL.join(',')).split(',');
+const piece = val('--piece', 'harbour-at-dusk');
+const phaseArg = args.find((a, i) => !a.startsWith('--') && !['--piece', '--out'].includes(args[i - 1]));
 const out = path.resolve(val('--out', path.join(here, '../../art')));
 const previews = path.join(out, '.previews');
 fs.mkdirSync(previews, { recursive: true });
-const W = 2560, H = 1440;
 
 const srv = await startServer();
 process.on('uncaughtException', (e) => { console.error(e); srv.stop(); process.exit(1); });
@@ -29,23 +28,30 @@ const page = await ctx.newPage();
 const rep = new Reporter(); rep.attach(page);
 
 await page.goto(srv.url); await page.waitForSelector('.library');
+// the painter and the piece are loaded into the app's page (no reload follows: the app is a single page)
+await page.addScriptTag({ path: path.join(here, 'artwork/kit.js') });
+await page.addScriptTag({ path: path.join(here, `artwork/${piece}.js`) });
+const meta = await page.evaluate(() => { const p = window.Painter; return { title: p.title, file: p.file, width: p.width, height: p.height, phases: p.phases, crops: p.crops || [] }; });
+const W = meta.width, H = meta.height;
+// room for the whole canvas near 1:1, so the pen lands where it means to
+await page.setViewportSize({ width: 3000, height: Math.max(1700, Math.round(H * 1.02) + 140) });
+const phases = phaseArg ? phaseArg.split(',') : meta.phases;
 await page.click('.new-tile'); await page.waitForSelector('.dialog');
-await page.fill('.dialog .input >> nth=0', 'Harbour at Dusk');
+await page.fill('.dialog .input >> nth=0', meta.title);
 await page.fill('.dialog .input.num >> nth=0', String(W)); await page.fill('.dialog .input.num >> nth=1', String(H));
 await page.click('.dialog-f .btn.primary'); await page.waitForSelector('canvas.overlay'); await page.waitForTimeout(800);
 await page.evaluate(() => { window.__quarc.ed.fitPage(); });
-await page.addScriptTag({ path: path.join(here, 'artwork/painter.js') });
 const dims = await page.evaluate(() => ({ w: window.__quarc.ed.page.width, h: window.__quarc.ed.page.height, zoom: window.__quarc.ed.view.zoom }));
 console.log('canvas', JSON.stringify(dims));
 
 const preview = async (name) => {
   const b64 = await page.evaluate(() => {
     const ed = window.__quarc.ed, c = document.querySelector('.viewport canvas:not(.overlay)'), pm = ed.view.pageMatrix(ed.page);
-    const o = document.createElement('canvas'); o.width = 1600; o.height = Math.round(1600 * ed.page.height / ed.page.width);
+    const o = document.createElement('canvas'); const k = 1400 / Math.max(ed.page.width, ed.page.height) * (ed.page.width >= ed.page.height ? 1600 / 1400 : 1); o.width = Math.round(ed.page.width * k); o.height = Math.round(ed.page.height * k);
     o.getContext('2d').drawImage(c, pm.e, pm.f, ed.page.width * pm.a, ed.page.height * pm.d, 0, 0, o.width, o.height);
     return o.toDataURL('image/jpeg', 0.88).split(',')[1];
   });
-  fs.writeFileSync(path.join(previews, `${name}.jpg`), Buffer.from(b64, 'base64'));
+  fs.writeFileSync(path.join(previews, `${meta.file}-${name}.jpg`), Buffer.from(b64, 'base64'));
 };
 
 /** a 1:1 crop of the canvas (page coordinates), to judge the brushwork at full size */
@@ -56,18 +62,18 @@ const crop = async (name, x, y, w, h) => {
     o.getContext('2d').drawImage(c, pm.e + x * pm.a, pm.f + y * pm.d, w * pm.a, h * pm.d, 0, 0, w, h);
     return o.toDataURL('image/jpeg', 0.9).split(',')[1];
   }, [x, y, w, h]);
-  fs.writeFileSync(path.join(previews, `${name}.jpg`), Buffer.from(b64, 'base64'));
+  fs.writeFileSync(path.join(previews, `${meta.file}-${name}.jpg`), Buffer.from(b64, 'base64'));
 };
 
 for (const ph of phases) {
   const t0 = Date.now();
-  await page.evaluate((p) => window.Painter[p](), ph);
+  await page.evaluate((p) => window.Painter.run[p](), ph);
   await page.waitForTimeout(400);
   await preview(ph);
   console.log(`  ${ph.padEnd(7)} ${((Date.now() - t0) / 1000).toFixed(0)} s   strokes so far: ${await page.evaluate(() => window.__quarc.ed.history.items.length)}`);
 }
 
-await crop('crop-sun', 1250, 640, 1300, 760); await crop('crop-boat-rocks', 0, 640, 1300, 800);
+for (const c of meta.crops) await crop(...c);
 
 if (flag('--final')) {
   const exportAs = async (label, file, tweak) => {
@@ -85,9 +91,9 @@ if (flag('--final')) {
     const input = row.querySelector('input'); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
     set.call(input, String(v)); input.dispatchEvent(new Event('input', { bubbles: true }));
   }, [label, v]);
-  await exportAs('PNG', 'harbour-at-dusk.png');
-  await exportAs('Quarc Draw', 'harbour-at-dusk.qdraw');
-  await exportAs('WebP', 'hero.webp', async () => { await setSlider('Scale', 0.75); await setSlider('Quality', 0.8); });
+  await exportAs('PNG', `${meta.file}.png`);
+  await exportAs('Quarc Draw', `${meta.file}.qdraw`);
+  if (flag('--web')) await exportAs('WebP', `${meta.file}.webp`, async () => { await setSlider('Scale', 1920 / Math.max(W, H)); await setSlider('Quality', 0.8); });
 }
 
 rep.summary(); await browser.close(); srv.stop();

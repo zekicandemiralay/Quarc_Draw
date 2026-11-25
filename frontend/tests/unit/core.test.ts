@@ -252,3 +252,27 @@ describe('transform box', () => {
     expect(c.x).toBeCloseTo(50, 6); expect(c.y).toBeCloseTo(50, 6);
   });
 });
+
+import { stickyRotation, normAngle } from '../../src/core/viewport';
+describe('view rotation detents', () => {
+  const d = (deg: number) => (deg * Math.PI) / 180;
+  it('sticks to exactly upright within a few degrees', () => {
+    expect(stickyRotation(d(6))).toEqual({ rot: 0, snapped: true });
+    expect(stickyRotation(d(-7.5))).toEqual({ rot: 0, snapped: true });
+    expect(stickyRotation(d(361))).toEqual({ rot: 0, snapped: true });
+  });
+  it('sticks more gently at quarter turns', () => {
+    expect(stickyRotation(d(93)).rot).toBeCloseTo(Math.PI / 2, 9);
+    expect(stickyRotation(d(-178)).rot).toBeCloseTo(Math.PI, 9);
+    expect(stickyRotation(d(97)).snapped).toBe(false);
+  });
+  it('turns freely elsewhere', () => {
+    const s = stickyRotation(d(30));
+    expect(s.snapped).toBe(false);
+    expect(s.rot).toBeCloseTo(d(30), 9);
+  });
+  it('wraps angles into (-180°, 180°]', () => {
+    expect(normAngle(d(190))).toBeCloseTo(d(-170), 9);
+    expect(normAngle(d(-540))).toBeCloseTo(Math.PI, 9);
+  });
+});

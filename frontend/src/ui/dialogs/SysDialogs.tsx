@@ -17,6 +17,7 @@ import { setPageBackground } from '../../editor/pageOps';
 import { Units } from '../../core/model';
 import { formatBytes, timeAgo, createCanvas, ctx2d, canvasToBlob } from '../../core/util';
 import { storageEstimate, persistStorage } from '../../app/storage';
+import { useCurrentPainting } from '../paintings';
 
 // ---------------------------------------------------------------- generic prompt
 export function PromptDialog({ p, onClose }: { p: PromptPayload; onClose: () => void }) {
@@ -59,7 +60,7 @@ export function PrefsDialog({ onClose }: { onClose: () => void }) {
         <b>Documents</b>
         <Switch on={p.autosave} onChange={(v) => prefs.set({ autosave: v })} label="Autosave to the library a few seconds after every change" />
         <Switch on={p.checker} onChange={(v) => prefs.set({ checker: v })} label="Show checkerboard behind transparent areas" />
-        <Switch on={!p.hideHero} onChange={(v) => prefs.set({ hideHero: !v })} label="Show the painting on the home screen" />
+        <Switch on={!p.hideHero} onChange={(v) => prefs.set({ hideHero: !v })} label="Show a painting on the home screen" />
         <div className="divider" style={{ margin: 0 }} />
         <b>Storage</b>
         <div className="row"><span className="muted">{est ? `${formatBytes(est.used)} used of ${formatBytes(est.quota)} available` : 'Storage estimate unavailable'}</span><span className="spacer" />
@@ -103,10 +104,11 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
 
 // ---------------------------------------------------------------- about
 export function AboutDialog({ onClose }: { onClose: () => void }) {
+  const [, painting] = useCurrentPainting();
   return (
     <Dialog title="About Quarc Draw" onClose={onClose} footer={<button className="btn primary" onClick={onClose}>Close</button>}>
       <div className="col" style={{ alignItems: 'center', textAlign: 'center', gap: 8, padding: '0 0 8px' }}>
-        <div className="about-art"><img src="/art/harbour-at-dusk.webp" alt="" draggable={false} onError={(e) => { (e.currentTarget.parentElement as HTMLElement).style.display = 'none'; }} /></div>
+        <div className="about-art" title={`“${painting.title}” — oil, painted in Quarc Draw`}><img src={painting.src} style={{ objectPosition: painting.pos }} alt="" draggable={false} onError={(e) => { (e.currentTarget.parentElement as HTMLElement).style.display = 'none'; }} /></div>
         <img src="/logo.png" width={72} style={{ borderRadius: 20, marginTop: -44, border: '4px solid var(--bg-2)', background: 'var(--bg-2)', position: 'relative' }} alt="" />
         <h2 style={{ margin: 0 }}>Quarc <span style={{ color: 'var(--accent)' }}>Draw</span></h2>
         <div className="muted">Version {__APP_VERSION__} · by QuarcNet</div>

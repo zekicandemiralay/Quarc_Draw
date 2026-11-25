@@ -80,6 +80,7 @@ export function CanvasView({ ed }: { ed: Editor }) {
 function ZoomChip({ ed }: { ed: Editor }) {
   const z = useEditor(ed, ['view'], () => ed.view.zoom);
   const rot = useEditor(ed, ['view'], () => Math.round(ed.view.rotationDeg()));
+  const flipped = useEditor(ed, ['view'], () => ed.view.flipX);
   return (
     <div className="viewport-chip">
       <div className="pill">
@@ -87,7 +88,7 @@ function ZoomChip({ ed }: { ed: Editor }) {
         <span style={{ minWidth: 44, textAlign: 'center', fontVariantNumeric: 'tabular-nums', cursor: 'pointer' }} title="Click for 100%" onClick={() => ed.zoomTo(1)}>{Math.round(z * 100)}%</span>
         <button title="Zoom in" onClick={() => ed.zoomBy(1.25)}><Icon name="plus" size={14} /></button>
         <button title="Fit page" onClick={() => ed.fitPage()}><Icon name="fit" size={14} /></button>
-        {rot !== 0 && <button title="Reset rotation" onClick={() => { ed.view.resetRotation(); ed.changed('view'); }}><Icon name="rotate-view" size={14} /><span style={{ fontSize: 11 }}>{rot}°</span></button>}
+        {(rot !== 0 || flipped) && <button className="upright" title="Back to upright (Shift+R)" onClick={() => ed.resetViewRotation()}><Icon name="rotate-view" size={14} /><span>{rot !== 0 ? `${rot}°` : 'Flipped'}</span><b>Upright</b></button>}
       </div>
     </div>
   );

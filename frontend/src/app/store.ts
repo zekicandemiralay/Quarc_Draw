@@ -50,6 +50,8 @@ export interface Prefs {
   tutorialSeen: boolean;
   /** hide the painting on the home screen */
   hideHero: boolean;
+  /** which of the paintings the home screen shows (advances every launch) */
+  heroIndex: number;
   fonts: string[];      // user-loaded font family names
   canvasBg: string;
   language: string;
@@ -58,5 +60,5 @@ export const prefs = new Store<Prefs>('quarcdraw.prefs.v1', {
   theme: 'dark', penOnly: false, palmRejection: true, pressureGamma: 1, autosave: true,
   showRulers: true, showStatusBar: true, checker: true, recentColors: [], swatches: [], userGradients: [], userBrushes: [],
   customShortcuts: {}, panelWidth: 300, leftSidebar: true, rightDock: true, openPanels: ['color', 'layers'],
-  authorName: '', tutorialSeen: false, hideHero: false, fonts: [], canvasBg: '', language: 'en',
+  authorName: '', tutorialSeen: false, hideHero: false, heroIndex: -1, fonts: [], canvasBg: '', language: 'en',
 });

@@ -288,6 +288,12 @@ input, select, textarea { font: inherit; color: var(--text); }
 .hero h1 b { color: var(--accent-hi); font-weight: 700; }
 .hero p { margin: 6px 0 0; font-size: 14px; line-height: 1.45; color: rgba(255, 255, 255, 0.88); text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5); }
 .hero .credit { position: absolute; z-index: 1; right: 16px; bottom: 11px; font-size: 11px; color: rgba(255, 255, 255, 0.72); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7); }
+.hero img.fade { animation: hero-in 0.7s ease both; }
+@keyframes hero-in { from { opacity: 0; transform: scale(1.015); } to { opacity: 1; transform: none; } }
+.hero .dots { position: absolute; z-index: 2; top: 14px; left: 18px; display: flex; gap: 7px; }
+.hero .dots button { width: 9px; height: 9px; padding: 0; border-radius: 999px; border: 0; background: rgba(255, 255, 255, 0.45); cursor: pointer; transition: width 0.2s, background 0.2s; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4); }
+.hero .dots button:hover { background: rgba(255, 255, 255, 0.8); }
+.hero .dots button.on { width: 22px; background: #fff; }
 .hero .x { position: absolute; z-index: 2; top: 8px; right: 8px; color: #fff; background: rgba(8, 14, 32, 0.4); }
 .hero .x:hover { background: rgba(8, 14, 32, 0.7); }
 @media (max-height: 560px), (max-width: 760px) { .hero { display: none; } }
@@ -357,3 +363,8 @@ table.keys td:last-child { text-align: right; }
 /* two-column property grids need a narrower label */
 .grid2 .field > label { width: 20px; }
 .grid2 .field { margin: 3px 0; }
+
+/* the "you are rotated" pill on the canvas: easy to see, one tap back to upright */
+.viewport-chip .pill button.upright { display: flex; flex-direction: row; align-items: center; white-space: nowrap; height: 26px; gap: 6px; padding: 0 10px; background: var(--accent-bg); color: var(--accent-hi); border-radius: 999px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.viewport-chip .pill button.upright b { font-weight: 600; }
+.viewport-chip .pill button.upright:hover { background: var(--accent); color: var(--on-accent); }

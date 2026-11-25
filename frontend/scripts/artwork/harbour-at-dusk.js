@@ -1,111 +1,12 @@
 // "Harbour at Dusk" — an oil painting made INSIDE Quarc Draw.
 //
-// This file runs in the page of the real app. It does not draw pixels itself: it sits at the canvas like a hand with a pen and
-// sends the same pen events a tablet would (position + pressure), so every mark is made by the app's own brush engine —
-// the Oil Bristle brush with wet colour mixing and canvas grain, the airbrush for glows — on separate layers.
-// scripts/paint-artwork.mjs drives it. Everything is seeded: the same script paints the same picture.
+// Runs in the page of the real app on top of kit.js: every mark is a pen stroke through the app's own brush engine — the Oil
+// Bristle brush with wet colour mixing and canvas grain, the airbrush for glows — on separate layers. Seeded: same picture every time.
 
 (() => {
   'use strict';
-  const ed = () => window.__quarc.ed;
-  const W = () => ed().page.width, H = () => ed().page.height;
-
-  // ------------------------------------------------------------------ small helpers
-  let seed = 20261125;
-  const R = () => { seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-  const rnd = (a, b) => a + (b - a) * R();
-  const gauss = () => (R() + R() + R() - 1.5) / 0.87;                      // roughly N(0, 1)
-  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
-  const smooth = (t) => t * t * (3 - 2 * t);
-  const hex2rgb = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
-  const rgb2hex = (c) => '#' + c.map((v) => Math.round(clamp(v, 0, 255)).toString(16).padStart(2, '0')).join('');
-  const mix = (a, b, t) => { const A = hex2rgb(a), B = hex2rgb(b); return rgb2hex(A.map((v, i) => v + (B[i] - v) * t)); };
-  const lighten = (c, t) => mix(c, '#ffffff', t), darken = (c, t) => mix(c, '#000000', t);
-  const ramp = (stops, t) => {
-    if (t <= stops[0][0]) return stops[0][1];
-    for (let i = 1; i < stops.length; i++) if (t <= stops[i][0]) return mix(stops[i - 1][1], stops[i][1], (t - stops[i - 1][0]) / (stops[i][0] - stops[i - 1][0]));
-    return stops[stops.length - 1][1];
-  };
-  const rgb2hsl = ([r, g, b]) => { r /= 255; g /= 255; b /= 255; const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2; let h = 0, s = 0; if (mx !== mn) { const d = mx - mn; s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn); h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h *= 60; } return [h, s, l]; };
-  const hsl2rgb = ([h, s, l]) => { h = ((h % 360) + 360) % 360 / 360; const f = (p, q, t) => { t = (t + 1) % 1; return t < 1 / 6 ? p + (q - p) * 6 * t : t < 1 / 2 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p; }; if (s === 0) return [l * 255, l * 255, l * 255]; const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q; return [f(p, q, h + 1 / 3) * 255, f(p, q, h) * 255, f(p, q, h - 1 / 3) * 255]; };
-  /** a painter never mixes the exact same colour twice */
-  const jit = (c, dh = 4, ds = 0.05, dl = 0.045) => { const [h, s, l] = rgb2hsl(hex2rgb(c)); return rgb2hex(hsl2rgb([h + gauss() * dh, clamp(s + gauss() * ds, 0, 1), clamp(l + gauss() * dl, 0, 1)])); };
-
-  // ------------------------------------------------------------------ the pen
-  const tick = () => new Promise((r) => setTimeout(r, 0));
-  let current = null, strokes = 0;
-  const PRESET_DEFAULTS = {
-    'paint-oil': { hardness: 1, flow: 0.9, smoothing: 0.3, wet: 0.7, grainDepth: 0.09, grainScale: 1.0 },
-    'paint-acrylic': { hardness: 1, flow: 0.95, smoothing: 0.35, wet: 0.25, grainDepth: 0.08, grainScale: 1.0 },
-    'paint-airbrush': { hardness: 0, flow: 0.12, smoothing: 0.25, wet: 0 },
-  };
-  function setup(o) {
-    const e = ed(), preset = o.preset || 'paint-oil';
-    if (current !== preset) { e.setBrushPreset(preset); current = preset; }
-    const d = PRESET_DEFAULTS[preset] || {};
-    e.setBrush({ size: o.size, opacity: o.opacity ?? 1, wet: o.wet ?? d.wet ?? 0, flow: o.flow ?? d.flow ?? 0.9, smoothing: o.smoothing ?? d.smoothing ?? 0.3, hardness: o.hardness ?? d.hardness ?? 1, ...(d.grainDepth !== undefined ? { grainDepth: d.grainDepth, grainScale: d.grainScale } : {}) });
-    e.setFg(o.color);
-  }
-  /** one pen stroke along `pts` (page coordinates) with a natural pressure swell */
-  async function stroke(pts, o) {
-    setup(o);
-    const e = ed(), el = document.querySelector('canvas.overlay'), b = document.querySelector('.viewport').getBoundingClientRect(), pm = e.view.pageMatrix(e.page);
-    const w = W(), h = H(), n = pts.length, pw = o.pressure ?? rnd(0.62, 0.95);
-    const X = (p) => b.left + pm.a * clamp(p[0], 0.6, w - 0.6) + pm.c * clamp(p[1], 0.6, h - 0.6) + pm.e;
-    const Y = (p) => b.top + pm.b * clamp(p[0], 0.6, w - 0.6) + pm.d * clamp(p[1], 0.6, h - 0.6) + pm.f;
-    const ev = (type, i) => {
-      const t = n > 1 ? i / (n - 1) : 0.5;
-      const pr = type === 'pointerup' ? 0 : clamp(pw * (0.55 + 0.45 * Math.pow(Math.sin(Math.PI * clamp(t, 0.04, 0.96)), 0.55)), 0.15, 1);
-      return new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 31, pointerType: 'pen', isPrimary: true, clientX: X(pts[i]), clientY: Y(pts[i]), pressure: pr, buttons: type === 'pointerup' ? 0 : 1, button: 0 });
-    };
-    el.dispatchEvent(ev('pointerdown', 0));
-    for (let i = 1; i < n; i++) el.dispatchEvent(ev('pointermove', i));
-    el.dispatchEvent(ev('pointerup', n - 1));
-    if (++strokes % 24 === 0) await tick();
-  }
-  /** a single dab — used for soft glows */
-  const dab = (x, y, o) => stroke([[x, y], [x + 0.2, y]], { ...o, pressure: 1 });
-  /** points along a slightly wavy line */
-  function line(x0, y0, x1, y1, { amp = 0, waves = 1, step = 18, jitter = 0.7 } = {}) {
-    const len = Math.max(1, Math.hypot(x1 - x0, y1 - y0)), n = Math.max(3, Math.ceil(len / step)), ph = rnd(0, 6.28);
-    const nx = -(y1 - y0) / len, ny = (x1 - x0) / len, pts = [];
-    for (let i = 0; i <= n; i++) { const t = i / n, off = amp * Math.sin(ph + t * Math.PI * 2 * waves) + gauss() * jitter; pts.push([x0 + (x1 - x0) * t + nx * off, y0 + (y1 - y0) * t + ny * off]); }
-    return pts;
-  }
-  /** fill a polygon with rows of strokes (what a painter does with a flat brush) */
-  async function hatch(poly, o) {
-    const ys = poly.map((p) => p[1]), y0 = Math.min(...ys), y1 = Math.max(...ys);
-    for (let y = y0 + o.step * 0.5; y <= y1; y += o.step * rnd(0.85, 1.15)) {
-      const xs = [];
-      for (let i = 0; i < poly.length; i++) { const [ax, ay] = poly[i], [bx, by] = poly[(i + 1) % poly.length]; if ((ay <= y && by > y) || (by <= y && ay > y)) xs.push(ax + ((y - ay) / (by - ay)) * (bx - ax)); }
-      xs.sort((a, b) => a - b);
-      for (let k = 0; k + 1 < xs.length; k += 2) {
-        const xa = xs[k], xb = xs[k + 1];
-        if (xb - xa < 1.5) continue;
-        let x = xa - rnd(0, o.size * 0.25);
-        while (x < xb) {
-          const xe = Math.min(xb + o.size * 0.2, x + rnd(o.minLen ?? 120, o.maxLen ?? 380));
-          const yy = y + gauss() * o.step * 0.22, tilt = (o.tilt ?? 0) + gauss() * 0.01;
-          const c = jit(o.colorAt((x + xe) / 2, yy), o.dh ?? 4, o.ds ?? 0.05, o.dl ?? 0.045);
-          await stroke(line(x, yy, xe, yy + (xe - x) * tilt, { amp: o.amp ?? 3, waves: 1, step: o.size > 40 ? 22 : 14 }), { color: c, size: o.size * rnd(0.85, 1.15), opacity: o.opacity ?? 0.92, preset: o.preset, wet: o.wet });
-          x = xe - o.size * 0.18;
-        }
-      }
-    }
-  }
-  /** strokes that follow a polyline in overlapping chunks (soft, painterly edges) */
-  async function contour(pts, o) {
-    let acc = [pts[0]], dist = 0;
-    for (let i = 1; i < pts.length; i++) {
-      acc.push(pts[i]); dist += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
-      if (dist > (o.chunk ?? 150) || i === pts.length - 1) {
-        if (acc.length > 1) await stroke(acc.map((p) => [p[0] + gauss() * 0.5, p[1] + gauss() * 0.5]), { color: jit(o.colorAt(acc[0]), 3, 0.04, 0.03), size: o.size * rnd(0.9, 1.1), opacity: o.opacity ?? 0.95, wet: o.wet ?? 0.2, pressure: 0.85 });
-        acc = [pts[i]]; dist = 0;
-      }
-    }
-  }
-  /** rows of strokes over a rectangle (skies, water) */
-  const rectPoly = (x0, y0, x1, y1) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+  const { ed, W, H, R, rnd, gauss, clamp, smooth, mix, lighten, darken, ramp, jit, stroke, dab, line, hatch, contour, rectPoly, newLayer, nameFirstLayer, roughen } = window.ArtKit;
+  window.ArtKit.seed(20261125);
 
   // ------------------------------------------------------------------ the scene
   const horizonY = () => Math.round(H() * 0.6);
@@ -117,16 +18,6 @@
     const dx = (x - s.x) / (W() * 0.42), dy = (y - s.y) / (H() * 0.42);
     return mix(c, '#ffd9a2', Math.exp(-(dx * dx + dy * dy) * 2.4) * 0.6 * smooth(clamp(t * 1.15, 0, 1)));
   }
-
-  function newLayer(name, { blend, opacity } = {}) {
-    const e = ed();
-    e.setActiveLayer(null); e.ensureRasterTarget();
-    const l = e.page.layers[e.page.layers.length - 1];
-    l.name = name; if (blend) l.blend = blend; if (opacity !== undefined) l.opacity = opacity;
-    e.setActiveLayer(l.id); e.changed('layers', 'doc');
-    return l.id;
-  }
-  function nameFirstLayer(name) { const e = ed(); const l = e.page.layers[0]; l.name = name; e.setActiveLayer(l.id); e.changed('layers'); }
 
   const api = {};
 
@@ -262,19 +153,6 @@
   };
 
   // ---- 5. foreground rocks --------------------------------------------------
-  /** break a straight polyline up into a rough, natural one */
-  function roughen(pts, amp, levels = 3) {
-    let p = pts;
-    for (let l = 0; l < levels; l++) {
-      const q = [];
-      for (let i = 0; i < p.length - 1; i++) {
-        const [ax, ay] = p[i], [bx, by] = p[i + 1], len = Math.hypot(bx - ax, by - ay) || 1;
-        q.push(p[i], [(ax + bx) / 2 + (-(by - ay) / len) * gauss() * amp, (ay + by) / 2 + ((bx - ax) / len) * gauss() * amp]);
-      }
-      q.push(p[p.length - 1]); p = q; amp *= 0.55;
-    }
-    return p;
-  }
   api.rocks = async () => {
     newLayer('Foreground');
     const w = W(), h = H(), s = sun(), floor = h + 90;
@@ -348,5 +226,9 @@
     e.changed('layers', 'doc');
   };
 
-  window.Painter = api;
+  window.Painter = {
+    title: 'Harbour at Dusk', file: 'harbour-at-dusk', width: 2560, height: 1440,
+    phases: ['sky', 'clouds', 'sun', 'land', 'sea', 'boat', 'rocks', 'glaze'], run: api,
+    crops: [['crop-sun', 1250, 640, 1300, 760], ['crop-boat-rocks', 0, 640, 1300, 800]],
+  };
 })();

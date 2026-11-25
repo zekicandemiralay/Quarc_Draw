@@ -131,21 +131,38 @@ export async function ui({ page, rep, shot, assert, helpers: h, browser }) {
     const page = await newPage(browser);
     await page.goto(h.url); await page.waitForSelector('.library');
     await page.waitForSelector('.library .hero img', { timeout: 8000 });
-    const loaded = await page.evaluate(() => { const i = document.querySelector('.hero img'); return i.complete && i.naturalWidth >= 1900; });
-    assert(loaded, 'the painting file loads at 1920 px');
+    const shown = () => page.evaluate(() => { const i = document.querySelector('.hero img'); return { src: i.getAttribute('src'), ok: i.complete && Math.max(i.naturalWidth, i.naturalHeight) >= 1800 }; });
+    await page.waitForFunction(() => { const i = document.querySelector('.hero img'); return i && i.complete && i.naturalWidth > 0; });
+    const first = await shown();
+    assert(first.ok, `the painting file loads at full size (${first.src})`);
+    // the dots switch paintings; every one of them loads
+    const dots = await page.locator('.hero .dots button').count();
+    assert(dots >= 2, `one dot per painting (${dots})`);
+    for (let k = 0; k < dots; k++) {
+      await page.locator('.hero .dots button').nth(k).click();
+      await page.waitForFunction(() => { const i = document.querySelector('.hero img'); return i && i.complete && i.naturalWidth > 0; });
+      const s = await shown(); assert(s.ok, `painting ${k + 1} loads (${s.src})`);
+      assert((await page.textContent('.hero .credit')).includes('painted in Quarc Draw'), 'its credit is shown');
+    }
+    const current = (await shown()).src;
     await page.fill('.lib-top input.input', 'zzz'); await page.waitForTimeout(150);
     assert((await page.locator('.hero').count()) === 0, 'searching hides the banner');
     await page.fill('.lib-top input.input', ''); await page.waitForSelector('.hero');
     await h.cmd(page, 'help.about'); await page.waitForSelector('.about-art img');
-    assert(await page.evaluate(() => document.querySelector('.about-art img').naturalWidth >= 1900), 'the About box shows it too');
+    await page.waitForFunction(() => { const i = document.querySelector('.about-art img'); return i && i.complete && i.naturalWidth > 0; });
+    assert((await page.getAttribute('.about-art img', 'src')) === current, 'the About box shows the same painting as the home screen');
     assert((await page.textContent('.dialog')).includes('Version 1.'), 'About shows the real version number');
     await page.click('.dialog-f .btn.primary'); await page.waitForTimeout(150);
     await page.click('.hero .x'); await page.waitForTimeout(200);
     assert((await page.locator('.hero').count()) === 0, 'the cross hides the picture');
     await h.cmd(page, 'edit.prefs'); await page.waitForSelector('.dialog');
-    await page.click('.dialog label:has-text("Show the painting on the home screen")'); await page.waitForTimeout(150);
+    await page.click('.dialog label:has-text("Show a painting on the home screen")'); await page.waitForTimeout(150);
     await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.querySelector('.dialog'), null, { timeout: 4000 }).catch(() => undefined);
     await page.waitForSelector('.hero', { timeout: 4000 });
+    // the next launch shows the next painting
+    await page.reload(); await page.waitForSelector('.hero img');
+    const after = await page.getAttribute('.hero img', 'src');
+    assert(after !== current, `a new launch moves on to another painting (${current} → ${after})`);
     const small = await newPage(browser, { width: 390, height: 780 }); await small.goto(h.url); await small.waitForSelector('.library'); await small.waitForTimeout(300);
     assert(!(await small.locator('.hero').isVisible()), 'on a phone-sized screen the banner stays out of the way');
     await small.context().close(); await page.context().close();

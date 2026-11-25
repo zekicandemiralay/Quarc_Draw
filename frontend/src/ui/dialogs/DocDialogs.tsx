@@ -43,6 +43,7 @@ export function NewDocDialog({ onClose }: { onClose: () => void }) {
         <div className="row wrap" style={{ gap: 14 }}>
           <Field label="Width"><NumInput value={w} onChange={(v) => { setW(v); setPreset(''); }} min={1} max={16000} width={80} decimals={0} suffix="px" /></Field>
           <Field label="Height"><NumInput value={h} onChange={(v) => { setH(v); setPreset(''); }} min={1} max={16000} width={80} decimals={0} suffix="px" /></Field>
+          <Field label="Orientation"><Seg value={h > w ? 'portrait' : 'landscape'} onChange={(v) => { if ((v === 'portrait') !== (h > w) && w !== h) { setW(h); setH(w); } }} options={[{ value: 'landscape', label: 'Landscape' }, { value: 'portrait', label: 'Portrait' }]} /></Field>
           <Field label="Resolution"><NumInput value={dpi} onChange={setDpi} min={30} max={1200} width={70} decimals={0} suffix="dpi" /></Field>
           <Field label="Background"><ColorButton color={bg} onChange={setBg} alpha={false} /><Switch on={transparent} onChange={setTransparent} label="Transparent" /></Field>
         </div>
