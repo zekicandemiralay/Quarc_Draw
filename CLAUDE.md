@@ -37,7 +37,7 @@ check.sh, backup.sh, restore.sh and `.github/workflows/{tests,desktop-release}.y
   different one each launch, swipe/dots switch, tap opens `PaintingViewer` — full screen in a gilded frame; the About box shows the
   same one) were made
   in the app by `frontend/scripts/paint-artwork.mjs` + `scripts/artwork/kit.js` + one file per picture (`harbour-at-dusk.js`,
-  `sunflowers.js`, `campfire-by-the-lake.js`; `node scripts/paint-artwork.mjs --piece <name> --final --web`, seeded and reproducible; full-size `.qdraw`/`.png` are in
+  `sunflowers.js`, `campfire-by-the-lake.js`; `node scripts/paint-artwork.mjs --piece <name> --final --web`, seeded and reproducible (`--open <file.qdraw> --drop "Layer,Layer" <phases>` redoes only the last phases of a saved picture, see art/README.md); full-size `.qdraw`/`.png` are in
   `art/`, git-ignored; see art/README.md). Shown only on the home screen and in About, hidden on phones, switchable in Preferences —
   don't spread them around the app.
 - **Full-screen drawing** (`app/fullDraw.ts`, `ui/SimpleBar.tsx`, command `view.fullscreen`, key `F`): App hides every panel and

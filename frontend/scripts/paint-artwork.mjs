@@ -1,5 +1,7 @@
 // Paints a picture inside the real app (scripts/artwork/kit.js + scripts/artwork/<piece>.js) and saves it.
-//   npm run build && node scripts/paint-artwork.mjs [--piece harbour-at-dusk|sunflowers] [phase,phase,…] [--final] [--web] [--out <dir>]
+//   npm run build && node scripts/paint-artwork.mjs [--piece harbour-at-dusk|sunflowers|campfire-by-the-lake] [phase,phase,…] [--final] [--web] [--out <dir>]
+// To redo only the last phases of a finished picture (minutes instead of the full run): --open <file.qdraw> --drop "Layer A,Layer B" removes
+// those layers from the saved picture and the phases listed then paint on top again (the random strokes differ from a full run).
 // Every phase of the piece runs by default; a downscaled preview of the canvas is written after each one. With --final the
 // finished picture is exported through the app's own Export dialog: <out>/<piece>.qdraw (the layered project) and
 // <out>/<piece>.png (full size). --web also writes <out>/<piece>.webp (1920 px on the long side) — the copy the app shows on its
@@ -14,7 +16,7 @@ const args = process.argv.slice(2);
 const flag = (n) => args.includes(n);
 const val = (n, d) => (args.includes(n) ? args[args.indexOf(n) + 1] : d);
 const piece = val('--piece', 'harbour-at-dusk');
-const phaseArg = args.find((a, i) => !a.startsWith('--') && !['--piece', '--out'].includes(args[i - 1]));
+const phaseArg = args.find((a, i) => !a.startsWith('--') && !['--piece', '--out', '--open', '--drop'].includes(args[i - 1]));
 const out = path.resolve(val('--out', path.join(here, '../../art')));
 const previews = path.join(out, '.previews');
 fs.mkdirSync(previews, { recursive: true });
@@ -36,10 +38,23 @@ const W = meta.width, H = meta.height;
 // room for the whole canvas near 1:1, so the pen lands where it means to
 await page.setViewportSize({ width: 3000, height: Math.max(1700, Math.round(H * 1.02) + 140) });
 const phases = phaseArg ? phaseArg.split(',') : meta.phases;
-await page.click('.new-tile'); await page.waitForSelector('.dialog');
-await page.fill('.dialog .input >> nth=0', meta.title);
-await page.fill('.dialog .input.num >> nth=0', String(W)); await page.fill('.dialog .input.num >> nth=1', String(H));
-await page.click('.dialog-f .btn.primary'); await page.waitForSelector('canvas.overlay'); await page.waitForTimeout(800);
+if (val('--open', null)) {
+  // continue a saved picture: open it through the app's own Open command, then take the layers that are to be repainted off the top
+  const chooser = page.waitForEvent('filechooser');
+  await page.evaluate(() => window.__quarc.run('file.open'));
+  await (await chooser).setFiles(path.resolve(val('--open', null)));
+  await page.waitForSelector('canvas.overlay'); await page.waitForTimeout(2500);
+  for (const name of val('--drop', '').split(',').map((n) => n.trim()).filter(Boolean)) {
+    const found = await page.evaluate((n) => { const e = window.__quarc.ed, l = e.page.layers.find((x) => x.name === n); if (!l) return false; e.setActiveLayer(l.id); window.__quarc.run('layer.delete'); return true; }, name);
+    console.log(found ? '  dropped layer' : '  NO SUCH LAYER', name);
+  }
+  console.log('layers now:', JSON.stringify(await page.evaluate(() => window.__quarc.ed.page.layers.map((l) => l.name))));
+} else {
+  await page.click('.new-tile'); await page.waitForSelector('.dialog');
+  await page.fill('.dialog .input >> nth=0', meta.title);
+  await page.fill('.dialog .input.num >> nth=0', String(W)); await page.fill('.dialog .input.num >> nth=1', String(H));
+  await page.click('.dialog-f .btn.primary'); await page.waitForSelector('canvas.overlay'); await page.waitForTimeout(800);
+}
 await page.evaluate(() => { window.__quarc.ed.fitPage(); });
 const dims = await page.evaluate(() => ({ w: window.__quarc.ed.page.width, h: window.__quarc.ed.page.height, zoom: window.__quarc.ed.view.zoom }));
 console.log('canvas', JSON.stringify(dims));

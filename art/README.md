@@ -10,13 +10,15 @@ cd frontend && npm run build
 node scripts/paint-artwork.mjs --piece harbour-at-dusk --final --web   # --web: the 1920 px copy the app shows
 node scripts/paint-artwork.mjs --piece sunflowers --final --web
 node scripts/paint-artwork.mjs --piece campfire-by-the-lake --final --web
+# the lake takes ~15 min, so to redo only the last phases of a finished picture reopen it and drop their layers:
+node scripts/paint-artwork.mjs --piece campfire-by-the-lake --open ../art/campfire-by-the-lake.qdraw --drop "Water patch,Camp,Fire,Sparks and smoke,Pines,Firelight,Moonlight,Vignette" camp,fire,pines,glow --final --web
 ```
 
 | painting | size | layers | files here (not in git — large) |
 |---|---|---|---|
 | **Harbour at Dusk** — sunset over the sea, lighthouse, sailboat, rocks | 2560 × 1440 | 9 | `harbour-at-dusk.qdraw`, `.png` |
 | **Sunflowers** — a cream jug of sunflowers on a wooden table, swirling blue wall | 2000 × 2500 | 11 | `sunflowers.qdraw`, `.png` |
-| **Campfire by the Lake** — night: Milky Way, crescent moon, moonlit mountains, a lake, a campfire, a glowing tent and someone keeping warm | 2560 × 1440 | 18 | `campfire-by-the-lake.qdraw`, `.png` |
+| **Campfire by the Lake** — night: Milky Way, crescent moon, moonlit mountains, a lake, a campfire, a glowing tent and someone keeping warm on a tree stump | 2560 × 1440 | 19 | `campfire-by-the-lake.qdraw`, `.png` |
 
 Open a `.qdraw` with *File ▸ Open* to see every layer. The 1920 px copies in `frontend/public/art/` are what the app shows: the home
 screen banner shows a different one each time the app opens (swipe it or use its dots for another; tap it to see the painting whole in

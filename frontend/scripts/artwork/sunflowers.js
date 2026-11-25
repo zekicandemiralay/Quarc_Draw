@@ -63,12 +63,12 @@
   const HEADS = [
     { x: 1190, y: 395, r: 122, tilt: 0.75, rot: 0.25 },
     { x: 1000, y: 650, r: 232, tilt: 1.0, rot: 0.1 },
-    { x: 610, y: 905, r: 196, tilt: 0.82, rot: -0.35 },
-    { x: 1405, y: 865, r: 206, tilt: 0.8, rot: 0.4 },
-    { x: 380, y: 1320, r: 150, tilt: 0.55, rot: -0.72 },
-    { x: 1630, y: 1340, r: 142, tilt: 0.5, rot: 0.78 },
-    { x: 800, y: 1170, r: 172, tilt: 0.9, rot: -0.15 },
-    { x: 1255, y: 1215, r: 165, tilt: 0.72, rot: 0.55 },
+    { x: 590, y: 860, r: 192, tilt: 0.82, rot: -0.35 },
+    { x: 1420, y: 845, r: 204, tilt: 0.8, rot: 0.4 },
+    { x: 380, y: 1320, r: 150, tilt: 0.55, rot: -0.72, droop: true },
+    { x: 1630, y: 1340, r: 142, tilt: 0.5, rot: 0.78, droop: true },
+    { x: 765, y: 1095, r: 160, tilt: 0.9, rot: -0.15 },
+    { x: 1262, y: 1105, r: 156, tilt: 0.72, rot: 0.55 },
   ];
   /** a point in a flower head's own (round) coordinates, turned and foreshortened into the picture */
   const local = (h, u, v) => [h.x + u * Math.cos(h.rot) - v * h.tilt * Math.sin(h.rot), h.y + u * Math.sin(h.rot) + v * h.tilt * Math.cos(h.rot)];
@@ -91,23 +91,7 @@
     await stroke(Array.from({ length: 14 }, (_, i) => at(0.04 + (i / 13) * 0.93, dark * 0.98)), { color: '#26391a', size: Math.max(4, wid * 0.08), opacity: 0.7, wet: 0.1, pressure: 0.75 });
   }
 
-  // ------------------------------------------------------------------ 3. stems and the leaves behind the jug
-  api.stems = async () => {
-    newLayer('Stems');
-    for (const h of HEADS) {
-      const mx = VASE_X + clamp((h.x - VASE_X) * 0.12, -80, 80) + gauss() * 12, my = MOUTH_Y + 30;
-      const low = h.y > MOUTH_Y - 260, cx = (h.x + mx) / 2 + (h.x - VASE_X) * (low ? 0.05 : 0.22), cy = low ? Math.min(h.y, my) - 0.38 * Math.abs(h.x - mx) : (h.y + my) / 2 + 40;
-      const pts = Array.from({ length: 24 }, (_, i) => { const t = i / 23, u = 1 - t; return [u * u * h.x + 2 * u * t * cx + t * t * mx, u * u * h.y + 2 * u * t * cy + t * t * my]; });
-      const thick = 16 + h.r * 0.07;
-      await stroke(pts, { color: jit('#4b6a28', 4, 0.05, 0.04), size: thick, opacity: 0.97, wet: 0.3, pressure: 0.85 });
-      await stroke(pts.map(([x, y]) => [x - thick * 0.25, y - 2]), { color: jit('#87a845', 4, 0.05, 0.04), size: thick * 0.35, opacity: 0.85, wet: 0.2, pressure: 0.8 });
-    }
-    await leaf(880, 1250, Math.PI * 1.08, 300, 66, -0.18, 0.7);
-    await leaf(1150, 1235, -0.2, 320, 70, 0.2, 0.35);
-    await leaf(1010, 1150, -1.35, 220, 52, -0.15, 0.6);
-  };
-
-  // ------------------------------------------------------------------ 4. the jug
+  // ------------------------------------------------------------------ 3. the jug (the stems and leaves in its mouth come after it, in 4)
   const PROFILE = [[1290, 150], [1330, 127], [1400, 120], [1480, 176], [1580, 246], [1700, 272], [1820, 252], [1920, 200], [1972, 168]];
   const vr = (y) => { for (let i = 1; i < PROFILE.length; i++) if (y <= PROFILE[i][0]) { const [y0, r0] = PROFILE[i - 1], [y1, r1] = PROFILE[i], t = (y - y0) / (y1 - y0), s = t * t * (3 - 2 * t); return r0 + (r1 - r0) * s; } return PROFILE[PROFILE.length - 1][1]; };
   const BANDS = [[1632, 1688], [1752, 1770]];
@@ -134,6 +118,32 @@
     // the mouth: dark inside, cream lip
     await hatch(ellipsePts(VASE_X, 1292, 132, 24), { step: 6, size: 12, minLen: 30, maxLen: 120, colorAt: () => '#2d2319', dl: 0.03, opacity: 1, wet: 0.2 });
     await contour(ellipsePts(VASE_X, 1292, 148, 30).concat([[VASE_X + 148, 1292]]), { colorAt: () => '#efe4c8', size: 13, chunk: 160, opacity: 0.95, wet: 0.2 });
+  };
+
+  // ------------------------------------------------------------------ 4. the bouquet in the jug (after the jug: the stems go down into its dark mouth)
+  const LIP = (x) => MOUTH_Y - 8 + 30 * Math.sqrt(Math.max(0, 1 - ((x - VASE_X) / 148) ** 2));   // the front edge of the lip at x
+  api.stems = async () => {
+    newLayer('Stems');
+    // leaves rising out of the mouth
+    await leaf(900, 1288, Math.PI * 1.08, 300, 66, -0.18, 0.7);
+    await leaf(1100, 1288, -0.2, 320, 70, 0.2, 0.35);
+    await leaf(1005, 1285, -1.45, 230, 52, -0.15, 0.6);
+    for (const h of HEADS) {
+      const thick = 16 + h.r * 0.07;
+      const mx = VASE_X + clamp((h.x - VASE_X) * 0.12, -85, 85) + gauss() * 8;
+      const my = LIP(mx) + 5 - thick * 0.5;                    // the round end of the stem lies under the cream lip, painted over it below
+      // leaning stems rise steeply out of the mouth and curve to their head; the drooping ones arch over the rim
+      const cx = h.droop ? (h.x + mx) / 2 + (h.x - VASE_X) * 0.05 : mx + (h.x - mx) * 0.3;
+      const cy = h.droop ? Math.min(h.y, my) - 0.95 * Math.abs(h.x - mx) : h.y + (my - h.y) * 0.5;   // a drooping head hangs from a neck that rises out of the jug, arches, and bends down
+      const pts = Array.from({ length: 24 }, (_, k) => { const t = k / 23, u = 1 - t; return [u * u * h.x + 2 * u * t * cx + t * t * mx, u * u * h.y + 2 * u * t * cy + t * t * my]; });
+      await stroke(pts, { color: jit('#4b6a28', 4, 0.05, 0.04), size: thick, opacity: 0.97, wet: 0.3, pressure: 0.85 });
+      await stroke(pts.map(([x, y]) => [x - thick * 0.25, y - 2]), { color: jit('#87a845', 4, 0.05, 0.04), size: thick * 0.35, opacity: 0.85, wet: 0.2, pressure: 0.8 });
+      const inside = pts.filter(([x, y]) => y > MOUTH_Y - 28 && Math.abs(x - VASE_X) < 140);   // down in the jug the stem is in shadow
+      if (inside.length > 1) await stroke(inside, { color: '#18230f', size: thick * 1.02, opacity: 0.58, wet: 0.1, pressure: 0.85 });
+    }
+    // the front lip goes back over the stems' ends, so they really are inside the jug
+    const lip = Array.from({ length: 25 }, (_, k) => { const a = (Math.PI * k) / 24; return [VASE_X + 148 * Math.cos(a), 1292 + 30 * Math.sin(a)]; });
+    await contour(lip, { colorAt: () => '#efe4c8', size: 13, chunk: 160, opacity: 0.97, wet: 0.2 });
   };
 
   // ------------------------------------------------------------------ 5. the sunflowers
@@ -179,8 +189,8 @@
   // ------------------------------------------------------------------ 6. front leaves, fallen petals, light
   api.details = async () => {
     newLayer('Front leaves');
-    await leaf(940, 1318, Math.PI * 0.72, 330, 70, 0.22, 0.75);
-    await leaf(1075, 1318, Math.PI * 0.2, 290, 62, -0.25, 0.4);
+    await leaf(940, 1306, Math.PI * 0.72, 330, 70, 0.22, 0.75);
+    await leaf(1075, 1306, Math.PI * 0.2, 290, 62, -0.25, 0.4);
     newLayer('Fallen petals');
     for (const [x, y, a, c, bend] of [[690, 2050, -0.35, '#f2b72a', 0.18], [1440, 2110, 2.75, '#f6c63d', -0.15], [1540, 2058, 0.15, '#c98a2a', 0.22]]) {
       const len = 105, pt = (t, off) => { const b = bend * Math.sin(Math.PI * t) * len; return [x + Math.cos(a) * len * t - Math.sin(a) * (b + off), y + Math.sin(a) * len * t + Math.cos(a) * (b + off)]; };
@@ -198,7 +208,7 @@
 
   window.Painter = {
     title: 'Sunflowers', file: 'sunflowers', width: 2000, height: 2500,
-    phases: ['wall', 'table', 'stems', 'vase', 'flowers', 'details', 'glaze'], run: api,
-    crops: [['crop-flower', 740, 390, 520, 520], ['crop-jug', 700, 1250, 620, 800]],
+    phases: ['wall', 'table', 'vase', 'stems', 'flowers', 'details', 'glaze'], run: api,
+    crops: [['crop-flower', 740, 390, 520, 520], ['crop-mouth', 560, 950, 900, 520], ['crop-jug', 700, 1250, 620, 800]],
   };
 })();
