@@ -7,6 +7,8 @@ import { bus, openDialog, toast } from '../app/bus';
 import { commandForKeys, eventToKeys, runCommand } from '../app/commands';
 import { TOOL_CATALOG, TOOLBAR, toolMeta } from '../tools/catalog';
 import { Icon } from './icons';
+import { SimpleBar } from './SimpleBar';
+import { drawMode, exitFullDraw, toggleFullDraw } from '../app/fullDraw';
 import { MenuBar } from './MenuBar';
 import { Toolbar } from './Toolbar';
 import { OptionsBar } from './OptionsBar';
@@ -60,6 +62,7 @@ export function App() {
   const [showLibrary, setShowLibrary] = useState(true);
   const [dockTab, setDockTab] = useState<PanelId>('color');
   const [drag, setDrag] = useState(false);
+  const fullMode = drawMode.useSelect((s) => s.full);
   const fileRef = useRef<HTMLInputElement>(null);
   const pendingImage = useRef<{ asObject?: boolean } | null>(null);
 
@@ -70,6 +73,9 @@ export function App() {
   const lastCount = useRef(0);
   useEffect(() => { if (ws.editors.length > lastCount.current) setShowLibrary(false); if (ws.editors.length === 0) setShowLibrary(true); lastCount.current = ws.editors.length; }, [ws.editors.length]);
   useEffect(() => { if (ws.activeId) setShowLibrary(false); }, [ws.activeId]);
+
+  // full-screen drawing needs a document on screen
+  useEffect(() => { if (fullMode && (!ed || showLibrary)) exitFullDraw(); }, [fullMode, ed, showLibrary]);
 
   // first-run tour
   useEffect(() => { if (!tutorialSeen && ws.editors.length === 1) { openDialog('tutorial'); prefs.set({ tutorialSeen: true }); } }, [ws.editors.length, tutorialSeen]);
@@ -94,9 +100,10 @@ export function App() {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
       if (t && (t.closest('input, textarea, select, [contenteditable="true"]') || t.dataset?.textEditor)) return;
-      if (document.querySelector('.scrim')) return; // a dialog is open
+      if (document.querySelector('.scrim, .viewer')) return; // a dialog or the painting viewer is open
       const cur = workspace.active;
       if (e.key === ' ' && !e.repeat && cur) { cur.spaceDown = true; e.preventDefault(); return; }
+      if (e.key === 'Escape' && drawMode.get().full) { e.preventDefault(); exitFullDraw(); return; }
       if (cur && cur.tool.keyDown(e)) { e.preventDefault(); return; }
       const spec = eventToKeys(e);
       if (!spec) return;
@@ -106,6 +113,7 @@ export function App() {
       if (!cur || e.ctrlKey || e.metaKey || e.altKey) return;
       // tool shortcuts (cycle through tools sharing a key)
       const tk = toolKeyMap().get(spec.toLowerCase());
+      if (tk && drawMode.get().full && !tk.some((id) => id === 'brush' || id === 'eraser')) return; // full screen keeps to its basic tools
       if (tk) { const i = tk.indexOf(cur.toolId); cur.setTool(tk[(i + 1) % tk.length]); e.preventDefault(); return; }
       // number keys: opacity
       if (/^[0-9]$/.test(e.key) && !e.shiftKey) { const v = e.key === '0' ? 1 : parseInt(e.key) / 10; if (['brush', 'eraser'].includes(cur.toolId)) cur.setBrush({ opacity: v }); e.preventDefault(); }
@@ -160,11 +168,12 @@ export function App() {
   }, []);
 
   const activeTop = dockTab;
-  const showSidebar = leftSidebar && ed && !showLibrary && ed.doc.pages.length > 1;
+  const full = fullMode && !!ed && !showLibrary;
+  const showSidebar = !full && leftSidebar && ed && !showLibrary && ed.doc.pages.length > 1;
 
   return (
-    <div className="app">
-      {(
+    <div className={`app ${full ? 'full-draw' : ''}`}>
+      {!full && (
         <div className="titlebar">
           <div className="brand" onClick={() => setShowLibrary(true)} title="Documents library"><img src="/logo.png" alt="" /><span>Quarc <b>Draw</b></span></div>
           <MenuBar ed={ed} />
@@ -173,11 +182,12 @@ export function App() {
           <button className="btn ghost icon" title="Redo (Ctrl+Shift+Z)" disabled={!ed?.history.canRedo} onClick={() => ed?.redo()}><Icon name="redo" size={16} /></button>
           <button className="btn ghost icon" title="Command palette (Ctrl+K)" onClick={() => bus.emit('command-palette', undefined)}><Icon name="search" size={16} /></button>
           <button className="btn ghost icon" title="Library" onClick={() => setShowLibrary(!showLibrary)}><Icon name="library" size={16} /></button>
+          <button className="btn ghost icon" title="Full-screen drawing (F)" disabled={!ed || showLibrary} onClick={toggleFullDraw}><Icon name="expand" size={16} /></button>
           <button className="btn ghost icon" title="Toggle panels (Tab)" onClick={() => runCommand('view.focus')}><Icon name="sliders" size={16} /></button>
           <button className="btn ghost icon" title="Preferences" onClick={() => openDialog('prefs')}><Icon name="settings" size={16} /></button>
         </div>
       )}
-      {(
+      {!full && (
         <div className="tabs">
           {ws.editors.map((e) => (
             <div key={e.id} className={`tab ${e.id === ws.activeId && !showLibrary ? 'on' : ''}`} onClick={() => { workspace.setActive(e.id); setShowLibrary(false); }} onAuxClick={() => workspace.close(e)}>
@@ -189,16 +199,17 @@ export function App() {
           <button className="btn ghost icon sm tab-add" title="New (Ctrl+N)" onClick={() => openDialog('new')}><Icon name="plus" size={15} /></button>
         </div>
       )}
-      {ed && !showLibrary ? <OptionsBar ed={ed} /> : <div />}
+      {full ? null : ed && !showLibrary ? <OptionsBar ed={ed} /> : <div />}
       <div className="main" style={{ position: 'relative' }}>
-        {ed && <Toolbar ed={ed} />}
+        {ed && !full && <Toolbar ed={ed} />}
         {showSidebar && (
           <div className="sidebar">
             <PagesPanel ed={ed!} />
           </div>
         )}
-        {ed ? <CanvasView key={ed.id} ed={ed} /> : <div className="welcome" />}
-        {ed && rightDock && (
+        {ed ? <CanvasView key={ed.id} ed={ed} bare={full} /> : <div className="welcome" />}
+        {full && <SimpleBar ed={ed!} />}
+        {ed && rightDock && !full && (
           <div className="dock">
             <div className="dock-tabs">
               {DOCK.top.map((id) => <button key={id} className={`dock-tab ${activeTop === id ? 'on' : ''}`} onClick={() => setDockTab(id)} title={PANELS[id].title}><Icon name={PANELS[id].icon} size={14} />{activeTop === id ? PANELS[id].title : ''}</button>)}
@@ -209,7 +220,7 @@ export function App() {
         )}
         {showLibrary && <Library onClose={() => { if (ws.editors.length) setShowLibrary(false); }} />}
       </div>
-      <StatusBar ed={ed} />
+      {!full && <StatusBar ed={ed} />}
       <DialogHost /><Toasts /><CommandPalette /><ContextMenu />
       {drag && <div className="drop-overlay">Drop to open — or onto the canvas to place images</div>}
       <input ref={fileRef} type="file" style={{ display: 'none' }} />

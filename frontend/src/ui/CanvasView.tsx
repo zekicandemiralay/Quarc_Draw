@@ -10,13 +10,14 @@ import { prefs } from '../app/store';
 import { unitFactor } from '../core/model';
 import { uid } from '../core/util';
 import { Icon } from './icons';
+import { drawMode, toggleFullDraw } from '../app/fullDraw';
 
-export function CanvasView({ ed }: { ed: Editor }) {
+export function CanvasView({ ed, bare = false }: { ed: Editor; bare?: boolean }) {
   const wrap = useRef<HTMLDivElement>(null);
   const main = useRef<HTMLCanvasElement>(null);
   const over = useRef<HTMLCanvasElement>(null);
   const host = useRef<HTMLDivElement>(null);
-  const showRulers = prefs.useSelect((p) => p.showRulers);
+  const showRulers = prefs.useSelect((p) => p.showRulers) && !bare; // full-screen drawing: just the canvas
   const theme = prefs.useSelect((p) => p.theme);
   const checker = prefs.useSelect((p) => p.checker);
   const rendererRef = useRef<ViewRenderer | null>(null);
@@ -81,6 +82,7 @@ function ZoomChip({ ed }: { ed: Editor }) {
   const z = useEditor(ed, ['view'], () => ed.view.zoom);
   const rot = useEditor(ed, ['view'], () => Math.round(ed.view.rotationDeg()));
   const flipped = useEditor(ed, ['view'], () => ed.view.flipX);
+  const full = drawMode.useSelect((s) => s.full);
   return (
     <div className="viewport-chip">
       <div className="pill">
@@ -88,6 +90,7 @@ function ZoomChip({ ed }: { ed: Editor }) {
         <span style={{ minWidth: 44, textAlign: 'center', fontVariantNumeric: 'tabular-nums', cursor: 'pointer' }} title="Click for 100%" onClick={() => ed.zoomTo(1)}>{Math.round(z * 100)}%</span>
         <button title="Zoom in" onClick={() => ed.zoomBy(1.25)}><Icon name="plus" size={14} /></button>
         <button title="Fit page" onClick={() => ed.fitPage()}><Icon name="fit" size={14} /></button>
+        <button className="full-toggle" title={full ? 'Exit full screen (Esc)' : 'Full-screen drawing (F)'} aria-label={full ? 'Exit full screen' : 'Full-screen drawing'} onClick={toggleFullDraw}><Icon name={full ? 'collapse' : 'expand'} size={14} /></button>
         {(rot !== 0 || flipped) && <button className="upright" title="Back to upright (Shift+R)" onClick={() => ed.resetViewRotation()}><Icon name="rotate-view" size={14} /><span>{rot !== 0 ? `${rot}°` : 'Flipped'}</span><b>Upright</b></button>}
       </div>
     </div>

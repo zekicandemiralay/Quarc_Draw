@@ -281,7 +281,8 @@ input, select, textarea { font: inherit; color: var(--text); }
 .lib-top h2 { margin: 0; font-size: 20px; }
 /* the opening picture on the home screen, and the same painting in the About box */
 .hero { position: relative; flex: none; height: clamp(150px, 27vh, 270px); margin: 18px 22px 0; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); background: #0d1630; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28); }
-.hero img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 64%; user-select: none; }
+.hero { cursor: zoom-in; touch-action: pan-y; user-select: none; }
+.hero img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 64%; user-select: none; transition: transform 0.25s ease; }
 .hero::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(7, 12, 30, 0.8) 0%, rgba(7, 12, 30, 0.42) 42%, rgba(7, 12, 30, 0) 74%); pointer-events: none; }
 .hero .txt { position: absolute; z-index: 1; left: 28px; bottom: 22px; max-width: min(460px, 70%); color: #fff; }
 .hero h1 { margin: 0; font-size: 32px; letter-spacing: -0.6px; font-weight: 700; text-shadow: 0 2px 14px rgba(0, 0, 0, 0.45); }
@@ -368,3 +369,64 @@ table.keys td:last-child { text-align: right; }
 .viewport-chip .pill button.upright { display: flex; flex-direction: row; align-items: center; white-space: nowrap; height: 26px; gap: 6px; padding: 0 10px; background: var(--accent-bg); color: var(--accent-hi); border-radius: 999px; font-size: 12px; font-variant-numeric: tabular-nums; }
 .viewport-chip .pill button.upright b { font-weight: 600; }
 .viewport-chip .pill button.upright:hover { background: var(--accent); color: var(--on-accent); }
+
+/* ───────── the paintings, full screen: a gilded frame with a cream mat on a softly lit gallery wall ───────── */
+.viewer { position: fixed; inset: 0; z-index: 300; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: clamp(12px, 2.4vh, 24px);
+  background: radial-gradient(ellipse 62% 52% at 50% 36%, #3b352e 0%, #24201c 52%, #131110 100%); touch-action: none; user-select: none; animation: viewer-in 0.25s ease both; }
+@keyframes viewer-in { from { opacity: 0; } to { opacity: 1; } }
+.viewer .frame { margin: 0; padding: clamp(9px, 2.1vmin, 28px); border-radius: 2px; transition: transform 0.25s ease; animation: frame-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  background: linear-gradient(135deg, #6c4e1d 0%, #c79f4c 16%, #f2db93 28%, #a67a2d 46%, #e4c26c 63%, #7b5822 82%, #c9a04a 100%);
+  box-shadow: 0 34px 80px rgba(0, 0, 0, 0.62), 0 10px 24px rgba(0, 0, 0, 0.45), inset 0 0 0 2px rgba(255, 236, 170, 0.55), inset 0 0 0 5px rgba(64, 42, 10, 0.5), inset 0 0 20px rgba(40, 24, 4, 0.55); }
+@keyframes frame-in { from { opacity: 0; transform: scale(0.96) translateY(10px); } to { opacity: 1; transform: none; } }
+.viewer .mat { padding: clamp(9px, 3.1vmin, 44px); background: #efe7d5; box-shadow: inset 0 0 0 1px rgba(60, 40, 10, 0.35), inset 0 4px 12px rgba(0, 0, 0, 0.28); }
+.viewer .mat img { display: block; max-width: calc(100vw - 260px); max-height: calc(100vh - 280px); max-height: calc(100dvh - 280px); box-shadow: 0 0 0 1px #c8bda4, 0 1px 4px rgba(0, 0, 0, 0.4); }
+.viewer .plaque { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 7px 18px 8px; border-radius: 3px; color: #2b2009; font-family: Georgia, 'Times New Roman', serif;
+  background: linear-gradient(180deg, #e2c98a 0%, #b4934a 100%); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 250, 220, 0.65), inset 0 -1px 0 rgba(80, 55, 10, 0.4); }
+.viewer .plaque b { font-size: 15px; letter-spacing: 0.3px; font-weight: 700; }
+.viewer .plaque span { font-size: 11.5px; opacity: 0.8; }
+.viewer .viewer-dots { position: static; display: flex; gap: 7px; }
+.viewer .viewer-dots button { width: 9px; height: 9px; padding: 0; border: 0; border-radius: 999px; cursor: pointer; background: rgba(255, 240, 210, 0.35); transition: width 0.2s, background 0.2s; }
+.viewer .viewer-dots button.on { width: 22px; background: #f3e7c8; }
+.viewer-x, .viewer-nav { position: absolute; display: grid; place-items: center; border: 1px solid rgba(255, 245, 225, 0.16); background: rgba(255, 245, 225, 0.07); color: #f1e7d2; cursor: pointer; border-radius: 999px; transition: background 0.2s; }
+.viewer-x:hover, .viewer-nav:hover { background: rgba(255, 245, 225, 0.18); }
+.viewer-x { top: 16px; right: 16px; width: 44px; height: 44px; }
+.viewer-nav { top: 50%; width: 54px; height: 54px; transform: translateY(-50%); }
+.viewer-nav.prev { left: 22px; } .viewer-nav.next { right: 22px; }
+.about-art { cursor: zoom-in; }
+@media (max-width: 760px) {
+  .viewer .mat img { max-width: calc(100vw - 64px); max-height: calc(100dvh - 190px); }
+  .viewer-nav { display: none; }   /* swipe instead */
+}
+
+/* ───────── full-screen drawing: only the canvas and one floating bar of basic tools ───────── */
+.app.full-draw { grid-template-rows: 1fr; }
+.app.full-draw .main { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); background: var(--canvas-bg); }
+.simplebar { position: absolute; top: calc(10px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); z-index: 20; display: flex; align-items: center; gap: 4px; padding: 5px;
+  max-width: calc(100% - 16px); background: var(--bg-2); background: color-mix(in srgb, var(--bg-2) 92%, transparent); backdrop-filter: blur(10px); border: 1px solid var(--line-hi);
+  border-radius: 999px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.32); touch-action: none; user-select: none; animation: sb-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes sb-in { from { opacity: 0; transform: translate(-50%, -12px); } to { opacity: 1; transform: translateX(-50%); } }
+.simplebar button { border: 0; cursor: pointer; font: inherit; }
+.simplebar .sb-btn { width: 42px; height: 42px; flex: none; display: grid; place-items: center; border-radius: 999px; background: none; color: var(--text-dim); transition: background 0.15s, color 0.15s; }
+.simplebar .sb-btn:hover:not(:disabled) { background: var(--bg-3); color: var(--text); }
+.simplebar .sb-btn.on { background: var(--accent-bg); color: var(--accent-hi); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.simplebar .sb-btn:disabled { opacity: 0.35; cursor: default; }
+.simplebar .sb-exit { height: 42px; flex: none; display: flex; align-items: center; gap: 7px; padding: 0 16px 0 13px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-weight: 700; font-size: 13.5px; }
+.simplebar .sb-exit:hover { filter: brightness(1.08); }
+.simplebar .sb-color { width: 42px; height: 42px; flex: none; display: grid; place-items: center; padding: 0; border-radius: 999px; background: none; }
+.simplebar .sb-color i { width: 30px; height: 30px; border-radius: 999px; box-shadow: 0 0 0 2px var(--bg-2), 0 0 0 3.5px var(--line-hi); }
+.simplebar .sb-sep { width: 1px; height: 24px; flex: none; margin: 0 3px; background: var(--line-hi); }
+.simplebar .sb-size { display: flex; align-items: center; gap: 8px; padding: 0 6px; color: var(--text-dim); font-size: 12px; font-variant-numeric: tabular-nums; min-width: 0; }
+.simplebar .sb-size .sb-dot { width: 24px; height: 24px; flex: none; display: grid; place-items: center; }
+.simplebar .sb-size .sb-dot i { border-radius: 999px; background: var(--text); }
+.simplebar .sb-size input { width: 150px; min-width: 60px; flex: 1 1 auto; accent-color: var(--accent); }
+.simplebar .sb-size b { min-width: 30px; text-align: right; font-weight: 600; color: var(--text); }
+.viewport-chip .pill button.full-toggle { color: var(--accent-hi); }
+@media (max-width: 620px) {
+  .simplebar { gap: 2px; padding: 4px; }
+  .simplebar .sb-exit span { display: none; }
+  .simplebar .sb-btn, .simplebar .sb-color, .simplebar .sb-exit { width: 38px; height: 38px; }
+  .simplebar .sb-exit { padding: 0; justify-content: center; }
+  .simplebar .sb-size { padding: 0 2px; gap: 4px; } .simplebar .sb-size .sb-dot, .simplebar .sb-size b { display: none; }
+  .simplebar .sb-size input { width: 90px; }
+  .simplebar .sb-sep { margin: 0 1px; }
+}

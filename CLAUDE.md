@@ -34,11 +34,17 @@ check.sh, backup.sh, restore.sh and `.github/workflows/{tests,desktop-release}.y
   moves the canvas off the GPU and stalls ~100 ms). Don't re-render the React status bar per pointer move. Measure with
   `npm run perf` (frames per second) — the `render` e2e group checks incremental repaints equal a full repaint.
 - **The home-screen paintings** (`frontend/public/art/*.webp`, listed in `src/ui/paintings.ts`; the `Library.tsx` `Hero` shows a
-  different one each launch, dots switch by hand, the About box shows the same one) were made
+  different one each launch, swipe/dots switch, tap opens `PaintingViewer` — full screen in a gilded frame; the About box shows the
+  same one) were made
   in the app by `frontend/scripts/paint-artwork.mjs` + `scripts/artwork/kit.js` + one file per picture (`harbour-at-dusk.js`,
-  `sunflowers.js`; `node scripts/paint-artwork.mjs --piece <name> --final`, seeded and reproducible; full-size `.qdraw`/`.png` are in
+  `sunflowers.js`, `campfire-by-the-lake.js`; `node scripts/paint-artwork.mjs --piece <name> --final --web`, seeded and reproducible; full-size `.qdraw`/`.png` are in
   `art/`, git-ignored; see art/README.md). Shown only on the home screen and in About, hidden on phones, switchable in Preferences —
   don't spread them around the app.
+- **Full-screen drawing** (`app/fullDraw.ts`, `ui/SimpleBar.tsx`, command `view.fullscreen`, key `F`): App hides every panel and
+  `CanvasView bare` drops the rulers. Ways out: Exit, Esc, F, the zoom-pill button, Back (a `history.pushState` entry — Android's
+  Back button goes through it). Screen: Tauri `setFullscreen` (capability `core:window:allow-set-fullscreen`), Android our
+  `QuarcScreenPlugin` (immersive bars; Capacitor cancels the web Fullscreen API at once), browsers `requestFullscreen`.
+  Brush-family tools keep their own live settings across tool switches (`Editor.toolBrushLive`).
 - **Saving files:** everything goes through `saveBlob` / `downloadBlob` in `core/util.ts` (Android share sheet, Tauri Save dialog,
   browser download).
 - One undecodable remote document must not stop the sync round (`sync/engine.ts` skips it and logs it); sign-in, network and
@@ -47,7 +53,7 @@ check.sh, backup.sh, restore.sh and `.github/workflows/{tests,desktop-release}.y
 ## Tests
 
 `cd backend && npm test` (12), `cd frontend && npm run typecheck && npm test` (36) and `node tests/e2e/run.mjs [group]` after
-`npm run build` (63 steps, needs Edge/Chrome; the backend is started by the suite with the development login `--dev-auth`,
+`npm run build` (64 steps, needs Edge/Chrome; the backend is started by the suite with the development login `--dev-auth`,
 password `dev`; `E2E_DEBUG=1` shows its output). The sync group is timing-sensitive: do not run it while Docker/Gradle builds
 are hogging the machine. Desktop: `cd desktop/src-tauri && cargo test`.
 

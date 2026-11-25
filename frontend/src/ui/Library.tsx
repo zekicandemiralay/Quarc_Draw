@@ -12,6 +12,7 @@ import { downloadBlob, formatBytes, sanitizeFilename, timeAgo, uid } from '../co
 import { syncEngine } from '../sync/engine';
 import { prefs } from '../app/store';
 import { PAINTINGS, useCurrentPainting } from './paintings';
+import { PaintingViewer, useSwipe } from './PaintingViewer';
 
 type Filter = { kind: 'all' } | { kind: 'recent' } | { kind: 'star' } | { kind: 'folder'; name: string } | { kind: 'tag'; tag: string } | { kind: 'trash' };
 
@@ -43,23 +44,30 @@ export async function duplicateDoc(id: string) {
   toast('Duplicated', 'success');
 }
 
-/** The opening picture: one of the oil paintings made in Quarc Draw itself, a different one each launch. Home screen only. */
+/** The opening picture: one of the oil paintings made in Quarc Draw itself, a different one each launch. Swipe for another,
+ *  tap to see it whole, framed. Home screen only. */
 function Hero() {
   const [i, p, pick] = useCurrentPainting();
   const [broken, setBroken] = useState<Record<string, true>>({});
+  const [viewing, setViewing] = useState(false);
+  const n = PAINTINGS.length;
+  const { handlers, drag } = useSwipe({ prev: () => pick(i - 1), next: () => pick(i + 1), tap: () => setViewing(true) });
   if (broken[p.src]) return null;
   return (
-    <div className="hero">
-      <img key={p.src} className="fade" src={p.src} alt="" draggable={false} style={{ objectPosition: p.pos }} onError={() => setBroken((b) => ({ ...b, [p.src]: true }))} />
-      <div className="txt"><h1>Quarc <b>Draw</b></h1><p>Layers, oil brushes and vector shapes — draw anywhere, in sync everywhere.</p></div>
-      <div className="credit">“{p.title}” — oil, painted in Quarc Draw</div>
-      {PAINTINGS.length > 1 && (
-        <div className="dots" role="tablist" aria-label="Paintings">
-          {PAINTINGS.map((q, k) => <button key={q.src} role="tab" aria-selected={k === i} className={k === i ? 'on' : ''} title={`“${q.title}”`} onClick={() => pick(k)} />)}
-        </div>
-      )}
-      <button className="btn ghost icon sm x" title="Hide this picture (Preferences brings it back)" onClick={() => prefs.set({ hideHero: true })}><Icon name="close" size={14} /></button>
-    </div>
+    <>
+      <div className="hero" {...handlers} title={`“${p.title}” — tap to see it whole${n > 1 ? ', swipe for another painting' : ''}`}>
+        <img key={p.src} className="fade" src={p.src} alt="" draggable={false} style={{ objectPosition: p.pos, ...(drag ? { transform: `translateX(${drag * 0.25}px)` } : {}) }} onError={() => setBroken((b) => ({ ...b, [p.src]: true }))} />
+        <div className="txt"><h1>Quarc <b>Draw</b></h1><p>Layers, oil brushes and vector shapes — draw anywhere, in sync everywhere.</p></div>
+        <div className="credit">“{p.title}” — oil, painted in Quarc Draw</div>
+        {n > 1 && (
+          <div className="dots" role="tablist" aria-label="Paintings">
+            {PAINTINGS.map((q, k) => <button key={q.src} role="tab" aria-selected={k === i} className={k === i ? 'on' : ''} title={`“${q.title}”`} onClick={() => pick(k)} />)}
+          </div>
+        )}
+        <button className="btn ghost icon sm x" title="Hide this picture (Preferences brings it back)" onClick={() => prefs.set({ hideHero: true })}><Icon name="close" size={14} /></button>
+      </div>
+      {viewing && <PaintingViewer index={i} onIndex={pick} onClose={() => setViewing(false)} />}
+    </>
   );
 }
 

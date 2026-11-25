@@ -3,6 +3,7 @@
 import type { Editor } from '../editor/editor';
 import { workspace } from './workspace';
 import { prefs } from './store';
+import { drawMode, toggleFullDraw } from './fullDraw';
 import { bus, openDialog, toast } from './bus';
 import * as A from './actions';
 import * as L from '../editor/layerOps';
@@ -233,7 +234,8 @@ reg(
   C('view.perspective', 'Perspective guides', 'View', ({ ed }) => { if (!ed) return; const p = ed.doc.perspective; ed.doc.perspective = { ...p, enabled: !p.enabled, points: p.points.length ? p.points : perspectivePoints(ed, 2, 0.45) }; ed.changed('doc', 'view'); }, { enabled: has, checked: (c) => !!c.ed?.doc.perspective.enabled }),
   C('view.perspective.settings', 'Perspective settings…', 'View', ({ ed }) => ed && prompt('Perspective guides', [{ key: 'n', label: 'Vanishing points (1–3)', min: 1, max: 3, value: Math.max(1, ed.doc.perspective.points.length || 2) }, { key: 'h', label: 'Horizon height (%)', min: 0, max: 100, value: 45 }], (v) => { ed.doc.perspective = { ...ed.doc.perspective, enabled: true, points: perspectivePoints(ed, Math.round(v.n), v.h / 100) }; ed.changed('doc', 'view'); }), { enabled: has }),
   C('view.checker', 'Transparency checkerboard', 'View', () => prefs.set((p) => ({ checker: !p.checker })), { checked: () => prefs.get().checker }),
-  C('view.fullscreen', 'Full screen', 'View', () => { if (document.fullscreenElement) void document.exitFullscreen(); else void document.documentElement.requestFullscreen(); }, { keys: 'F11' }),
+  C('view.fullscreen', 'Full-screen drawing (basic tools)', 'View', () => toggleFullDraw(), { keys: 'F', enabled: has, checked: () => drawMode.get().full }),
+  C('view.fullscreen.window', 'Full screen window (all tools)', 'View', () => { if (document.fullscreenElement) void document.exitFullscreen(); else void document.documentElement.requestFullscreen(); }, { keys: 'F11' }),
   C('view.focus', 'Focus mode (hide panels)', 'View', () => { const p = prefs.get(); const hide = p.rightDock || p.leftSidebar; prefs.set({ rightDock: !hide, leftSidebar: !hide }); }, { keys: 'Tab' }),
 );
 

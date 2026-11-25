@@ -43,6 +43,8 @@ export class Editor {
   brush: BrushSettings = { ...DEFAULT_BRUSH };
   /** remember the last brush used for each tool so switching tools restores it */
   toolBrushes: Record<string, string> = { brush: 'pencil-hb', eraser: 'erase-hard', smudge: 'tool-smudge', blur: 'tool-blur', sharpen: 'tool-sharpen', dodge: 'tool-dodge', burn: 'tool-burn', clone: 'tool-clone' };
+  /** the settings each brush-family tool had when it was left (size, opacity…), so switching to the eraser and back keeps them */
+  private toolBrushLive: Record<string, BrushSettings> = {};
   private tools = new Map<string, Tool>();
 
   overlays: LayerOverlay[] = [];
@@ -302,11 +304,18 @@ export class Editor {
     if (id === this.toolId) return;
     this.tool.commit();
     this.tool.deactivate();
+    const leftBid = this.toolBrushes[this.toolId];
+    if (leftBid && this.brush.id === leftBid) this.toolBrushLive[this.toolId] = this.brush;
     this.prevToolId = this.toolId;
     this.toolId = id;
-    // brush-family tools restore their remembered preset
+    // brush-family tools come back as they were left, or else with their remembered preset
     const bid = this.toolBrushes[id];
-    if (bid) { const b = getBrush(bid) ?? prefs.get().userBrushes.find((x: BrushSettings) => x.id === bid); if (b) this.brush = { ...b }; this.changed('brush'); }
+    if (bid) {
+      const live = this.toolBrushLive[id];
+      const b = live?.id === bid ? live : getBrush(bid) ?? prefs.get().userBrushes.find((x: BrushSettings) => x.id === bid);
+      if (b) this.brush = { ...b };
+      this.changed('brush');
+    }
     this.tool.activate();
     this.changed('tool');
     this.requestOverlay();
@@ -318,6 +327,7 @@ export class Editor {
     const toolFor: Record<string, string> = { paint: 'brush', erase: 'eraser', smudge: 'smudge', blur: 'blur', sharpen: 'sharpen', dodge: 'dodge', burn: 'burn', clone: 'clone' };
     const tid = toolFor[b.mode];
     this.toolBrushes[tid] = id;
+    delete this.toolBrushLive[tid]; // a preset picked from the list starts fresh
     this.brush = { ...b };
     if (tid !== this.toolId && !['brush', 'eraser', 'smudge', 'blur', 'sharpen', 'dodge', 'burn', 'clone'].includes(this.toolId)) this.setTool(tid);
     else if (tid !== this.toolId) this.setTool(tid);

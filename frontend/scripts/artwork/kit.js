@@ -130,6 +130,29 @@
     }
     return p;
   }
+  /** is (x, y) inside the polygon? (even-odd) */
+  const inside = (poly, x, y) => { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, yi] = poly[i], [xj, yj] = poly[j]; if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c; } return c; };
+  /**
+   * Fill a shape the way a painter models a form: short, slightly curved strokes laid along the planes of the subject
+   * (`dir(x, y)` gives the direction, in radians), placed in random order so no rows show, each kept inside the shape.
+   * o: { dir, colorAt, spacing, len: [min, max], size: [min, max], wobble?, opacity?, wet?, preset?, dh?, ds?, dl? }
+   */
+  async function flowFill(poly, o) {
+    const xs = poly.map((q) => q[0]), ys = poly.map((q) => q[1]), sp = o.spacing;
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys), pts = [];
+    for (let y = y0 + sp / 2; y < y1; y += sp) for (let x = x0 + sp / 2; x < x1; x += sp) { const px = x + (R() - 0.5) * sp, py = y + (R() - 0.5) * sp; if (inside(poly, px, py)) pts.push([px, py]); }
+    for (let i = pts.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [pts[i], pts[j]] = [pts[j], pts[i]]; }
+    for (const [px, py] of pts) {
+      const a = o.dir(px, py) + gauss() * (o.wobble ?? 0.12), L = rnd(o.len[0], o.len[1]), dx = Math.cos(a), dy = Math.sin(a);
+      let t0 = -L / 2, t1 = L / 2;                                  // walk each end in until it lies inside the shape
+      while (t1 - t0 > 4 && !inside(poly, px + dx * t0, py + dy * t0)) t0 += 3;
+      while (t1 - t0 > 4 && !inside(poly, px + dx * t1, py + dy * t1)) t1 -= 3;
+      if (t1 - t0 < 4) continue;
+      const bend = gauss() * L * 0.06, nx = -dy, ny = dx, n = Math.max(3, Math.ceil((t1 - t0) / 12));
+      const pts2 = Array.from({ length: n + 1 }, (_, k) => { const t = t0 + ((t1 - t0) * k) / n, u = k / n; return [px + dx * t + nx * bend * Math.sin(Math.PI * u), py + dy * t + ny * bend * Math.sin(Math.PI * u)]; });
+      await stroke(pts2, { preset: o.preset, color: jit(o.colorAt(px, py), o.dh ?? 4, o.ds ?? 0.05, o.dl ?? 0.04), size: rnd(o.size[0], o.size[1]), opacity: o.opacity ?? 0.92, wet: o.wet ?? 0.35 });
+    }
+  }
   /** points around an ellipse (rx, ry, rotated by rot) */
   const ellipsePts = (cx, cy, rx, ry, rot = 0, n = 48) => Array.from({ length: n }, (_, i) => { const a = (i / n) * Math.PI * 2, x = Math.cos(a) * rx, y = Math.sin(a) * ry; return [cx + x * Math.cos(rot) - y * Math.sin(rot), cy + x * Math.sin(rot) + y * Math.cos(rot)]; });
   /** a soft radial darkening on its own multiply layer, painted straight onto the layer's raster surface */
@@ -145,7 +168,7 @@
 
   window.ArtKit = {
     ed, W, H, R, rnd, gauss, clamp, smooth, hex2rgb, rgb2hex, mix, lighten, darken, ramp, jit,
-    stroke, dab, line, hatch, contour, rectPoly, newLayer, nameFirstLayer, roughen, ellipsePts, vignette,
+    stroke, dab, line, hatch, contour, rectPoly, newLayer, nameFirstLayer, roughen, ellipsePts, vignette, flowFill, inside,
     /** start the random sequence: the same seed paints the same picture */
     seed(n) { seed = n | 0; },
   };

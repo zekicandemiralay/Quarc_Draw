@@ -18,6 +18,7 @@ import { Units } from '../../core/model';
 import { formatBytes, timeAgo, createCanvas, ctx2d, canvasToBlob } from '../../core/util';
 import { storageEstimate, persistStorage } from '../../app/storage';
 import { useCurrentPainting } from '../paintings';
+import { PaintingViewer } from '../PaintingViewer';
 
 // ---------------------------------------------------------------- generic prompt
 export function PromptDialog({ p, onClose }: { p: PromptPayload; onClose: () => void }) {
@@ -104,17 +105,19 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
 
 // ---------------------------------------------------------------- about
 export function AboutDialog({ onClose }: { onClose: () => void }) {
-  const [, painting] = useCurrentPainting();
+  const [index, painting, pick] = useCurrentPainting();
+  const [viewing, setViewing] = useState(false);
   return (
     <Dialog title="About Quarc Draw" onClose={onClose} footer={<button className="btn primary" onClick={onClose}>Close</button>}>
       <div className="col" style={{ alignItems: 'center', textAlign: 'center', gap: 8, padding: '0 0 8px' }}>
-        <div className="about-art" title={`“${painting.title}” — oil, painted in Quarc Draw`}><img src={painting.src} style={{ objectPosition: painting.pos }} alt="" draggable={false} onError={(e) => { (e.currentTarget.parentElement as HTMLElement).style.display = 'none'; }} /></div>
+        <div className="about-art" title={`“${painting.title}” — oil, painted in Quarc Draw · tap to see it whole`} onClick={() => setViewing(true)}><img src={painting.src} style={{ objectPosition: painting.pos }} alt="" draggable={false} onError={(e) => { (e.currentTarget.parentElement as HTMLElement).style.display = 'none'; }} /></div>
         <img src="/logo.png" width={72} style={{ borderRadius: 20, marginTop: -44, border: '4px solid var(--bg-2)', background: 'var(--bg-2)', position: 'relative' }} alt="" />
         <h2 style={{ margin: 0 }}>Quarc <span style={{ color: 'var(--accent)' }}>Draw</span></h2>
         <div className="muted">Version {__APP_VERSION__} · by QuarcNet</div>
         <p className="muted" style={{ maxWidth: 440 }}>A professional layered raster + vector drawing studio. Local-first: everything works offline and syncs through your Quarc account, a folder or WebDAV.</p>
         <div className="hint">Built with open-source libraries: React, pdf-lib, JSZip, ag-psd, paper.js, gifenc.</div>
       </div>
+      {viewing && <PaintingViewer index={index} onIndex={pick} onClose={() => setViewing(false)} />}
     </Dialog>
   );
 }

@@ -58,7 +58,7 @@ export function buildMenus(): Record<string, MenuEntry[]> {
       c('view.zoomin'), c('view.zoomout'), c('view.fit'), c('view.fitwidth'), c('view.fitall'), c('view.100'), c('view.200'), sep,
       c('view.rotate90'), c('view.rotatereset'), c('view.flip'), sep,
       c('view.rulers'), c('view.grid'), c('view.snapgrid'), c('view.gridsettings'), c('view.snapguides'), c('view.clearguides'), sep,
-      c('view.symmetry'), c('view.symmetry.settings'), c('view.perspective'), c('view.perspective.settings'), c('view.checker'), sep, c('view.focus'), c('view.fullscreen'),
+      c('view.symmetry'), c('view.symmetry.settings'), c('view.perspective'), c('view.perspective.settings'), c('view.checker'), sep, c('view.focus'), c('view.fullscreen'), c('view.fullscreen.window'),
     ],
     Window: [
       sub('Theme', [c('theme.dark'), c('theme.midnight'), c('theme.light')]), c('penonly'), sep,

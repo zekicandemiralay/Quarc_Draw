@@ -78,6 +78,8 @@ const P: Record<string, ReactNode> = {
   fx: <><path d="M4 7h4M6 7v10M12 7l6 10M18 7l-6 10" /></>,
   group: <><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M3 11V6a1 1 0 011-1h5l2 2" /></>,
   copy: <><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2" /></>,
+  expand: <><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7" /></>,
+  collapse: <><path d="M20 10h-6V4M4 14h6v6M14 10l7-7M10 14l-7 7" /></>,
   fit: <><path d="M4 9V5a1 1 0 011-1h4M20 9V5a1 1 0 00-1-1h-4M4 15v4a1 1 0 001 1h4M20 15v4a1 1 0 01-1 1h-4" /></>,
   grid: <><path d="M3 3h18v18H3zM9 3v18M15 3v18M3 9h18M3 15h18" /></>,
   page: <><rect x="5" y="3" width="14" height="18" rx="1.5" /><path d="M9 8h6M9 12h6M9 16h3" /></>,

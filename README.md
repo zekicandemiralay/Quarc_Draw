@@ -11,7 +11,7 @@ Quarc Draw is a single web app (TypeScript · React · Canvas 2D) that runs in a
 
 Notes and PDF reading live in their own Quarc apps (Quarc Notes, Quarc Reader); Quarc Draw is only for drawing.
 
-The pictures on the home screen and in the About box — *Harbour at Dusk* and *Sunflowers*, a different one each time the app opens — are oil paintings made **inside Quarc Draw** — a script drives the real app with pen events, so every stroke comes from its own Oil Bristle brush and layers (see [art/README.md](art/README.md); *Preferences* can hide them).
+The pictures on the home screen and in the About box — *Harbour at Dusk*, *Sunflowers* and *Campfire by the Lake*, a different one each time the app opens (swipe for another, tap to see it framed, full screen) — are oil paintings made **inside Quarc Draw** — a script drives the real app with pen events, so every stroke comes from its own Oil Bristle brush and layers (see [art/README.md](art/README.md); *Preferences* can hide them).
 
 ## Features
 
@@ -27,6 +27,7 @@ The pictures on the home screen and in the About box — *Harbour at Dusk* and *
 - **Transform**: free transform with scale / rotate / flip, crop with aspect ratios, canvas & image size, rotate / flip canvas, trim
 - **Filters** (live preview): Gaussian / box / motion / zoom / spin blur, unsharp mask, noise, median, emboss, find edges, pixelate, halftone, oil paint, glow, vignette, chromatic aberration, twirl, spherize, ripple, wave
 - **Adjustments** (destructive *or* as editable layers): brightness/contrast, hue/saturation, levels (with histogram), **curves**, exposure, vibrance, colour balance, photo filter, gradient map, invert, B&W, sepia, threshold, posterize
+- **Full-screen drawing**: just the canvas and one floating bar — brush, eraser, colour, size, undo, redo. In with the ⤢ button (title bar or the zoom pill) or `F`; out with **Exit**, `Esc`, `F` or the Back button. On Android it hides the system bars, on the desktop apps the window fills the screen
 - **Drawing aids**: symmetry (vertical / horizontal / quadrant / radial), perspective guides, rulers with units (px / in / cm / mm / pt), draggable guides, grid + isometric grid, snapping to grid / guides / objects, pixel grid at high zoom, view rotation & flip
 - **Colour**: HSV picker with alpha, harmony generator, 11 built-in palettes + your own, eyedropper (1–11 px averaging)
 
@@ -135,7 +136,7 @@ Tag `vX.Y.Z` and push the tag: GitHub Actions builds the Windows, macOS and Linu
 
 ## Keyboard & input
 
-`Ctrl+K` command palette · `F1` all shortcuts (rebindable) · `V` move · `B` brush · `E` eraser · `M` marquee · `L` lasso · `W` wand · `G` bucket · `P` pen · `T` text · `I` eyedropper · `Space`-drag pan · `[` `]` brush size · `X` swap colours · `Ctrl+Z / Ctrl+Shift+Z` undo / redo · `Ctrl+T` free transform · `Ctrl+Shift+E` export · `Shift+R` back to upright.
+`Ctrl+K` command palette · `F1` all shortcuts (rebindable) · `V` move · `B` brush · `E` eraser · `M` marquee · `L` lasso · `W` wand · `G` bucket · `P` pen · `T` text · `I` eyedropper · `Space`-drag pan · `[` `]` brush size · `X` swap colours · `Ctrl+Z / Ctrl+Shift+Z` undo / redo · `Ctrl+T` free transform · `Ctrl+Shift+E` export · `Shift+R` back to upright · `F` full-screen drawing (`Esc` leaves) · `F11` full screen with all tools.
 Touch & pen: pinch to zoom; twist with two fingers to rotate (only a deliberate twist turns the view, and it clicks into place at upright and at quarter turns — the pill on the canvas or `Shift+R` turns it back); two-finger tap = undo, three-finger tap = redo, optional **pen-only** mode and **palm rejection**, pressure curve in *Preferences*. New drawings can be Landscape or Portrait; *Image ▸ Rotate 90°* turns an existing one.
 
 ## Project layout

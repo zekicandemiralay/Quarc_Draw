@@ -8,6 +8,8 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         // Quarc Store single sign-on (see Quarc_Store/sso-kit/README.md).
         registerPlugin(QuarcSsoPlugin.class);
+        // Full-screen drawing: hides the system bars (the web Fullscreen API doesn't work in Capacitor).
+        registerPlugin(QuarcScreenPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

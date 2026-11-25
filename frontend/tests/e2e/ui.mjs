@@ -144,6 +144,33 @@ export async function ui({ page, rep, shot, assert, helpers: h, browser }) {
       const s = await shown(); assert(s.ok, `painting ${k + 1} loads (${s.src})`);
       assert((await page.textContent('.hero .credit')).includes('painted in Quarc Draw'), 'its credit is shown');
     }
+    // swipe the banner: right to left shows the next painting
+    const hb = await page.locator('.hero').boundingBox(), hy = hb.y + hb.height * 0.6;
+    const beforeSwipe = (await shown()).src;
+    await page.mouse.move(hb.x + hb.width * 0.7, hy); await page.mouse.down();
+    for (let k = 1; k <= 8; k++) await page.mouse.move(hb.x + hb.width * (0.7 - k * 0.05), hy);
+    await page.mouse.up(); await page.waitForTimeout(200);
+    assert((await shown()).src !== beforeSwipe, 'swiping the banner shows another painting');
+    // tap: the painting, whole, in a frame on a gallery wall; ← → and swipes browse; Esc or a tap on the wall closes
+    await page.mouse.click(hb.x + hb.width * 0.55, hy); await page.waitForSelector('.viewer .frame img');
+    await page.waitForFunction(() => { const i = document.querySelector('.viewer .frame img'); return i.complete && i.naturalWidth > 0; });
+    const inFrame = await page.getAttribute('.viewer .frame img', 'src');
+    assert(inFrame === (await shown()).src, 'the viewer opens on the painting that was tapped');
+    assert(await page.isVisible('.viewer .plaque'), 'with its title plaque');
+    await page.keyboard.press('ArrowRight'); await page.waitForTimeout(150);
+    assert((await page.getAttribute('.viewer .frame img', 'src')) !== inFrame, 'the right arrow shows the next painting');
+    const vb = await page.locator('.viewer').boundingBox();
+    const beforeVSwipe = await page.getAttribute('.viewer .frame img', 'src');
+    await page.mouse.move(vb.width * 0.3, vb.height * 0.5); await page.mouse.down();
+    for (let k = 1; k <= 8; k++) await page.mouse.move(vb.width * (0.3 + k * 0.04), vb.height * 0.5);
+    await page.mouse.up(); await page.waitForTimeout(150);
+    assert((await page.getAttribute('.viewer .frame img', 'src')) !== beforeVSwipe, 'swiping in the viewer goes back');
+    assert((await page.locator('.viewer').count()) === 1, 'swiping does not close it');
+    await page.keyboard.press('Escape'); await page.waitForTimeout(150);
+    assert((await page.locator('.viewer').count()) === 0, 'Esc closes the viewer');
+    await page.mouse.click(hb.x + hb.width * 0.55, hy); await page.waitForSelector('.viewer .frame');
+    await page.mouse.click(8, vb.height - 8); await page.waitForTimeout(150);
+    assert((await page.locator('.viewer').count()) === 0, 'a tap on the wall closes it');
     const current = (await shown()).src;
     await page.fill('.lib-top input.input', 'zzz'); await page.waitForTimeout(150);
     assert((await page.locator('.hero').count()) === 0, 'searching hides the banner');
@@ -166,6 +193,76 @@ export async function ui({ page, rep, shot, assert, helpers: h, browser }) {
     const small = await newPage(browser, { width: 390, height: 780 }); await small.goto(h.url); await small.waitForSelector('.library'); await small.waitForTimeout(300);
     assert(!(await small.locator('.hero').isVisible()), 'on a phone-sized screen the banner stays out of the way');
     await small.context().close(); await page.context().close();
+  });
+
+  await rep.step('full-screen drawing: only the canvas and basic tools; Exit, Esc, F, the zoom pill and Back all return', async () => {
+    const fp = await newPage(browser);
+    await fp.goto(h.url); await fp.waitForSelector('.library');
+    await fp.click('.new-tile'); await fp.waitForSelector('.dialog');
+    await fp.fill('.dialog .input >> nth=0', 'Full'); await fp.click('.dialog-f .btn.primary');
+    await fp.waitForSelector('canvas.overlay'); await fp.waitForTimeout(400);
+    await h.ev(fp, (ed) => ed.setTool('move'));
+    const chrome = () => fp.evaluate(() => ['.titlebar', '.tabs', '.optionsbar', '.toolbar', '.dock', '.statusbar', '.ruler'].filter((s) => document.querySelector(s)));
+    const isFull = () => fp.evaluate(() => !!document.querySelector('.simplebar'));
+    assert((await chrome()).length >= 5, 'the normal view has its menus and panels');
+    // in: the title-bar button
+    await fp.click('.titlebar button[title^="Full-screen drawing"]'); await fp.waitForSelector('.simplebar');
+    assert((await chrome()).length === 0, `nothing but the canvas and the bar (left: ${await chrome()})`);
+    assert((await h.ev(fp, (ed) => ed.toolId)) === 'brush', 'it starts with the brush');
+    const vp = await fp.locator('.viewport').boundingBox(), win = await fp.evaluate(() => [innerWidth, innerHeight]);
+    assert(vp.width >= win[0] - 2 && vp.height >= win[1] - 2, `the canvas fills the screen (${vp.width}×${vp.height} of ${win})`);
+    // draw, size, eraser, colour, undo / redo — all from the bar
+    await fp.locator('.sb-size input').fill('3');
+    assert((await h.ev(fp, (ed) => ed.brush.size)) === 20, 'the slider sets the brush size');
+    await h.stroke(fp, [[-120, 30], [120, 30]]);
+    const drawn = await h.pixels(fp); assert(drawn > 0, 'the brush paints');
+    await fp.click('.simplebar .sb-btn[title^="Eraser"]'); assert((await h.ev(fp, (ed) => ed.toolId)) === 'eraser', 'eraser');
+    await h.stroke(fp, [[-120, 30], [0, 30]]);
+    assert((await h.pixels(fp)) < drawn, 'the eraser erases');
+    await fp.click('.simplebar .sb-btn[title^="Undo"]'); await fp.waitForTimeout(150);
+    assert((await h.pixels(fp)) === drawn, 'undo from the bar');
+    await fp.click('.simplebar .sb-btn[title^="Redo"]'); await fp.waitForTimeout(150);
+    assert((await h.pixels(fp)) < drawn, 'redo from the bar');
+    await fp.click('.simplebar .sb-btn[title^="Brush"]'); assert((await h.ev(fp, (ed) => ed.toolId)) === 'brush', 'back to the brush');
+    assert((await h.ev(fp, (ed) => ed.brush.size)) === 20, 'the brush keeps its size after a turn with the eraser');
+    await fp.click('.simplebar .sb-color'); await fp.waitForSelector('.popover');
+    await fp.keyboard.press('Escape'); await fp.waitForTimeout(150);
+    assert((await fp.locator('.popover').count()) === 0 && await isFull(), 'Esc closes the colour picker first and stays in full screen');
+    await fp.keyboard.press('v'); await fp.waitForTimeout(100);
+    assert((await h.ev(fp, (ed) => ed.toolId)) === 'brush', 'other tool shortcuts stay out of full screen');
+    await fp.screenshot({ path: 'tests/e2e/out/67-full-screen.png' });
+    // out: Esc
+    await fp.keyboard.press('Escape'); await fp.waitForTimeout(200);
+    assert(!(await isFull()) && (await chrome()).length >= 5, 'Esc returns to the normal view');
+    // F in, F out
+    await fp.keyboard.press('f'); await fp.waitForSelector('.simplebar');
+    await fp.keyboard.press('f'); await fp.waitForTimeout(200);
+    assert(!(await isFull()), 'F toggles');
+    // the zoom pill's button both ways
+    await fp.click('.viewport-chip .full-toggle'); await fp.waitForSelector('.simplebar');
+    await fp.click('.viewport-chip .full-toggle'); await fp.waitForTimeout(200);
+    assert(!(await isFull()), 'the zoom pill button toggles');
+    // Back (Android back button / browser back)
+    await fp.keyboard.press('f'); await fp.waitForSelector('.simplebar');
+    await fp.goBack(); await fp.waitForTimeout(300);
+    assert(!(await isFull()) && (await fp.locator('canvas.overlay').count()) === 1, 'Back leaves full screen and keeps the document open');
+    // the Exit button, and nothing left behind in the history
+    await fp.keyboard.press('f'); await fp.waitForSelector('.simplebar');
+    await fp.click('.simplebar .sb-exit'); await fp.waitForTimeout(300);
+    assert(!(await isFull()) && !(await fp.evaluate(() => history.state?.quarcFullDraw)), 'Exit returns and tidies the history');
+    assert((await h.pixels(fp)) > 0, 'the drawing is still there');
+    await fp.context().close();
+    // a phone: the bar fits
+    const ph = await newPage(browser, { width: 390, height: 780 });
+    await ph.goto(h.url); await ph.waitForSelector('.library');
+    await ph.click('.new-tile'); await ph.waitForSelector('.dialog');
+    await ph.fill('.dialog .input >> nth=0', 'Phone'); await ph.click('.dialog-f .btn.primary');
+    await ph.waitForSelector('canvas.overlay'); await ph.waitForTimeout(300);
+    await ph.click('.titlebar button[title^="Full-screen drawing"]'); await ph.waitForSelector('.simplebar');
+    const bar = await ph.locator('.simplebar').boundingBox();
+    assert(bar.x >= 0 && bar.x + bar.width <= 390, `the bar fits a phone (${Math.round(bar.x)}–${Math.round(bar.x + bar.width)})`);
+    await ph.screenshot({ path: 'tests/e2e/out/68-full-screen-phone.png' });
+    await ph.context().close();
   });
 
 }
