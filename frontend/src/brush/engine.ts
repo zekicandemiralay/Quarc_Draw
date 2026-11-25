@@ -85,12 +85,14 @@ function makeTip(kind: TipKind, hardness: number, color: string, res: number, im
   } else if (kind === 'square') {
     ctx.fillStyle = color; ctx.fillRect(1, 1, res - 2, res - 2);
   } else if (kind === 'bristle') {
+    // Each bristle is a short streak lying along the stroke direction (the tip is turned to follow the stroke), so the stamps
+    // of a moving brush run together into hairline streaks like real bristles — round bristle marks showed as rows of beads.
     ctx.fillStyle = color;
-    const n = 26;
+    const n = 40;
     for (let i = 0; i < n; i++) {
-      const a = rand() * Math.PI * 2, d = Math.sqrt(rand()) * (r * 0.82), br = r * (0.07 + rand() * 0.1);
-      ctx.globalAlpha = 0.45 + rand() * 0.55;
-      ctx.beginPath(); ctx.arc(r + Math.cos(a) * d, r + Math.sin(a) * d, br, 0, Math.PI * 2); ctx.fill();
+      const a = rand() * Math.PI * 2, d = Math.sqrt(rand()) * (r * 0.72), br = r * (0.035 + rand() * 0.06);
+      ctx.globalAlpha = 0.4 + rand() * 0.6;
+      ctx.beginPath(); ctx.ellipse(r + Math.cos(a) * d, r + Math.sin(a) * d, br * (3 + rand() * 2.5), br, 0, 0, Math.PI * 2); ctx.fill();
     }
   } else if (kind === 'star') {
     ctx.fillStyle = color; ctx.beginPath();
@@ -148,9 +150,21 @@ export function grainTile(kind: GrainKind, depth: number): HTMLCanvasElement | n
   else if (kind === 'rough') { octave(8, 0.4); octave(16, 0.35); octave(4, 0.25); }
   else if (kind === 'noise') { octave(1, 1); }
   else if (kind === 'canvas') {
+    // A woven fabric, not a lattice of dots: warp and weft threads of 8 px that pass over and under each other, each thread a
+    // little thicker / brighter than its neighbours, plus fibre noise and slow slubs. (Two sine waves made a perfectly even dot grid.)
+    const P = 8, n = S / P;
+    const warp = Array.from({ length: n }, () => 0.8 + 0.4 * rand()), weft = Array.from({ length: n }, () => 0.8 + 0.4 * rand());
+    const warpShift = Array.from({ length: n }, () => (rand() - 0.5) * 0.18), weftShift = Array.from({ length: n }, () => (rand() - 0.5) * 0.18);
+    const slubG = Array.from({ length: 17 * 17 }, () => rand());                  // low-frequency irregularity (16 cells across, wraps)
+    const prof = (t: number) => Math.pow(Math.sin(Math.PI * Math.min(1, Math.max(0, t))), 0.7);
     for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-      const wx = Math.sin((x / 4) * Math.PI) * 0.5 + 0.5, wy = Math.sin((y / 4) * Math.PI) * 0.5 + 0.5;
-      base[y * S + x] = (wx * 0.5 + wy * 0.5) * 0.75 + rand() * 0.25;
+      const i = Math.floor(x / P), j = Math.floor(y / P);
+      const fx = (x % P + 0.5) / P + warpShift[i], fy = (y % P + 0.5) / P + weftShift[j];
+      const warpOver = ((i + j) & 1) === 0;
+      let v = warpOver ? prof(fx) * (0.6 + 0.4 * prof(fy)) * warp[i] : prof(fy) * (0.6 + 0.4 * prof(fx)) * weft[j];
+      const gx = x / 16, gy = y / 16, x0 = Math.floor(gx) % 16, y0 = Math.floor(gy) % 16, tx = gx - Math.floor(gx), ty = gy - Math.floor(gy);
+      const slub = slubG[y0 * 17 + x0] * (1 - tx) * (1 - ty) + slubG[y0 * 17 + (x0 + 1) % 16] * tx * (1 - ty) + slubG[((y0 + 1) % 16) * 17 + x0] * (1 - tx) * ty + slubG[((y0 + 1) % 16) * 17 + (x0 + 1) % 16] * tx * ty;
+      base[y * S + x] = v + (rand() - 0.5) * 0.22 + (slub - 0.5) * 0.3;
     }
   }
   // normalise to 0..1 contrast
@@ -158,7 +172,7 @@ export function grainTile(kind: GrainKind, depth: number): HTMLCanvasElement | n
   for (const v of base) { if (v < mn) mn = v; if (v > mx) mx = v; }
   for (let i = 0; i < S * S; i++) {
     const n = (base[i] - mn) / (mx - mn || 1);
-    d[i * 4 + 3] = 255 * (1 - depth + depth * n * n * (3 - 2 * n));
+    d[i * 4 + 3] = 255 * (1 - depth + depth * (kind === 'canvas' ? n : n * n * (3 - 2 * n)));
   }
   ctx.putImageData(id, 0, 0);
   grainCache.set(key, c);

@@ -45,7 +45,7 @@ check.sh, backup.sh, restore.sh and `.github/workflows/{tests,desktop-release}.y
 ## Tests
 
 `cd backend && npm test` (12), `cd frontend && npm run typecheck && npm test` (32) and `node tests/e2e/run.mjs [group]` after
-`npm run build` (60 steps, needs Edge/Chrome; the backend is started by the suite with the development login `--dev-auth`,
+`npm run build` (62 steps, needs Edge/Chrome; the backend is started by the suite with the development login `--dev-auth`,
 password `dev`; `E2E_DEBUG=1` shows its output). The sync group is timing-sensitive: do not run it while Docker/Gradle builds
 are hogging the machine. Desktop: `cd desktop/src-tauri && cargo test`.
 

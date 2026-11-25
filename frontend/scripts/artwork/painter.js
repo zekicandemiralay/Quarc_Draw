@@ -35,8 +35,8 @@
   const tick = () => new Promise((r) => setTimeout(r, 0));
   let current = null, strokes = 0;
   const PRESET_DEFAULTS = {
-    'paint-oil': { hardness: 1, flow: 0.9, smoothing: 0.3, wet: 0.7, grainDepth: 0.13, grainScale: 1.6 },
-    'paint-acrylic': { hardness: 1, flow: 0.95, smoothing: 0.35, wet: 0.25, grainDepth: 0.12, grainScale: 1.6 },
+    'paint-oil': { hardness: 1, flow: 0.9, smoothing: 0.3, wet: 0.7, grainDepth: 0.09, grainScale: 1.0 },
+    'paint-acrylic': { hardness: 1, flow: 0.95, smoothing: 0.35, wet: 0.25, grainDepth: 0.08, grainScale: 1.0 },
     'paint-airbrush': { hardness: 0, flow: 0.12, smoothing: 0.25, wet: 0 },
   };
   function setup(o) {
