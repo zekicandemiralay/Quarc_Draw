@@ -4,8 +4,8 @@ import { Emitter } from '../core/util';
 
 export type DialogName =
   | 'new' | 'open-library' | 'export' | 'import' | 'image-size' | 'canvas-size' | 'prefs' | 'shortcuts' | 'about' | 'sync'
-  | 'filter' | 'adjust' | 'effects' | 'gradient-editor' | 'page-setup' | 'note' | 'palette' | 'help' | 'templates' | 'save-as'
-  | 'rename' | 'stroke-selection' | 'fill' | 'curves' | 'signature' | 'brush-editor' | 'present' | 'tutorial' | 'share' | 'prompt' | 'doc-info';
+  | 'filter' | 'adjust' | 'effects' | 'gradient-editor' | 'page-setup' | 'palette' | 'help' | 'save-as'
+  | 'rename' | 'stroke-selection' | 'fill' | 'curves' | 'brush-editor' | 'tutorial' | 'share' | 'prompt' | 'doc-info';
 
 /** generic numeric prompt: { title, fields:[{key,label,min,max,step,value}], ok: (values)=>void } */
 export interface PromptPayload {
@@ -23,7 +23,6 @@ export interface BusEvents {
   'pick-image': { asObject?: boolean };
   'pick-file': { accept: string; handler: (files: File[]) => void; multiple?: boolean };
   'text-edit': { editorId: string };
-  workspace: { name: 'studio' | 'notes' | 'reader' };
   'command-palette': void;
   'context-menu': { x: number; y: number };
   'toggle-panel': { id: string };

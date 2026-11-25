@@ -6,9 +6,7 @@ import { useEditor } from '../editor/editor';
 import { ViewRenderer } from './canvas/viewRenderer';
 import { CanvasController } from './canvas/controller';
 import { assetEvents } from '../core/assets';
-import { pdfEvents } from '../pdf/pdfSource';
 import { prefs } from '../app/store';
-import { searchState } from '../pdf/search';
 import { unitFactor } from '../core/model';
 import { uid } from '../core/util';
 import { Icon } from './icons';
@@ -26,9 +24,11 @@ export function CanvasView({ ed }: { ed: Editor }) {
   useEffect(() => {
     const r = new ViewRenderer(ed, main.current!, over.current!);
     rendererRef.current = r;
+    (window as any).__quarc && ((window as any).__quarc.renderer = r); // debugging / performance probes
     const ctl = new CanvasController(ed, over.current!);
     ctl.attach();
     ed.renderHook = () => r.schedule();
+    ed.renderRectHook = (page, rect) => r.scheduleRect(page, rect);
     ed.overlayHook = () => r.scheduleOverlay();
     ed.overlayHost = host.current;
     const measure = () => {
@@ -41,9 +41,9 @@ export function CanvasView({ ed }: { ed: Editor }) {
     const offs = [
       ed.events.on('view', () => r.schedule()), ed.events.on('doc', () => r.schedule()), ed.events.on('selection', () => r.scheduleOverlay()),
       ed.events.on('objsel', () => r.scheduleOverlay()), ed.events.on('page', () => r.schedule()), ed.events.on('layers', () => r.schedule()),
-      assetEvents.on('ready', () => r.schedule()), pdfEvents.on('ready', () => r.schedule()),
+      assetEvents.on('ready', () => r.schedule()),
     ];
-    const unsub = [prefs.subscribe(() => { r.readTheme(); r.schedule(); }), searchState.subscribe(() => r.scheduleOverlay())];
+    const unsub = [prefs.subscribe(() => { r.readTheme(); r.schedule(); })];
     // animate marching ants / laser
     const timer = setInterval(() => {
       const t = ed.tool;
@@ -53,7 +53,7 @@ export function CanvasView({ ed }: { ed: Editor }) {
     r.schedule();
     return () => {
       clearInterval(timer); ro.disconnect(); ctl.detach(); offs.forEach((o) => o()); unsub.forEach((u) => u());
-      if (ed.renderHook) ed.renderHook = null; ed.overlayHook = null; ed.overlayHost = null;
+      if (ed.renderHook) ed.renderHook = null; ed.renderRectHook = null; ed.overlayHook = null; ed.overlayHost = null;
     };
   }, [ed]);
 

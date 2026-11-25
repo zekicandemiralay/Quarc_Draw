@@ -24,6 +24,4 @@ void StrictMode;
 import { workspace } from './app/workspace';
 import { runCommand } from './app/commands';
 (window as any).__quarc = { workspace, run: runCommand, get ed() { return workspace.active; } };
-import { searchState } from './pdf/search';
-(window as any).__quarc.search = searchState;
 (window as any).__quarc.syncEngine = syncEngine;

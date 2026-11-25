@@ -1,5 +1,6 @@
-// UI flows: library management, crop tool, curves & effects dialogs, text formatting, templates, pages panel.
-export async function ui({ page, rep, shot, assert, helpers: h }) {
+import { newPage } from './lib.mjs';
+// UI flows: library management, crop tool, curves & effects dialogs, text formatting, pages, library shapes.
+export async function ui({ page, rep, shot, assert, helpers: h, browser }) {
   const newDoc = async (title) => {
     await page.click('.new-tile'); await page.waitForSelector('.dialog');
     await page.fill('.dialog .input >> nth=0', title); await page.click('.dialog-f .btn.primary');
@@ -13,33 +14,39 @@ export async function ui({ page, rep, shot, assert, helpers: h }) {
     await page.waitForTimeout(3300);
     await h.cmd(page, 'file.library'); await page.waitForSelector('.doc-card');
     assert((await page.locator('.doc-card').count()) === 1, 'one card');
-    await page.locator('.doc-card .star').click(); await page.waitForTimeout(600);
+    await page.locator('.doc-card .star').click(); await page.waitForSelector('.doc-card .star.on', { timeout: 8000 }).catch(() => undefined);
     assert((await page.locator('.doc-card .star.on').count()) === 1, 'favourited');
     // rename via the card menu
     await page.locator('.doc-card .btn.icon').first().click();
     await page.click('.popover .menu-item:has-text("Rename")'); await page.waitForSelector('.dialog');
-    await page.fill('.dialog input.input', 'Alpha renamed'); await page.click('.dialog-f .btn.primary'); await page.waitForTimeout(800);
+    await page.fill('.dialog input.input', 'Alpha renamed'); await page.click('.dialog-f .btn.primary');
+    // renaming saves the document first (encoding layers can take a moment on a busy machine): wait for the result instead of sleeping
+    await page.waitForFunction(() => document.querySelector('.doc-card .t')?.textContent === 'Alpha renamed', null, { timeout: 8000 }).catch(() => undefined);
     assert((await page.locator('.doc-card .t').first().innerText()) === 'Alpha renamed', 'renamed');
     // duplicate
-    await page.locator('.doc-card .btn.icon').first().click(); await page.click('.popover .menu-item:has-text("Duplicate")'); await page.waitForTimeout(900);
+    await page.locator('.doc-card .btn.icon').first().click(); await page.click('.popover .menu-item:has-text("Duplicate")');
+    await page.waitForFunction(() => document.querySelectorAll('.doc-card').length === 2, null, { timeout: 8000 }).catch(() => undefined);
     assert((await page.locator('.doc-card').count()) === 2, 'duplicated');
     // folder
     await page.locator('.lib-side h4 button').first().click(); await page.waitForSelector('.dialog');
     await page.fill('.dialog input.input', 'Projects'); await page.click('.dialog-f .btn.primary'); await page.waitForTimeout(300);
-    await page.locator('.doc-card .btn.icon').first().click(); await page.hover('.popover .submenu:has-text("Move to folder")'); await page.click('.popover .submenu .menu-item:has-text("Projects")'); await page.waitForTimeout(800);
+    await page.locator('.doc-card .btn.icon').first().click(); await page.hover('.popover .submenu:has-text("Move to folder")'); await page.click('.popover .submenu .menu-item:has-text("Projects")');
+    await page.waitForSelector('.lib-side .item:has-text("Projects")', { timeout: 8000 });
     await page.click('.lib-side .item:has-text("Projects")');
+    await page.waitForFunction(() => document.querySelectorAll('.doc-card').length === 1, null, { timeout: 8000 }).catch(() => undefined);
     assert((await page.locator('.doc-card').count()) === 1, 'folder filter shows the moved doc');
     await shot('60-library');
     // tag
     await page.locator('.doc-card .btn.icon').first().click(); await page.click('.popover .menu-item:has-text("Edit tags")'); await page.waitForSelector('.dialog');
-    await page.fill('.dialog input.input', 'sketch, wip'); await page.click('.dialog-f .btn.primary'); await page.waitForTimeout(800);
+    await page.fill('.dialog input.input', 'sketch, wip'); await page.click('.dialog-f .btn.primary'); await page.waitForSelector('.lib-side .item:has-text("wip")', { timeout: 8000 }).catch(() => undefined);
     assert((await page.locator('.lib-side .item:has-text("wip")').count()) === 1, 'tag appears in the sidebar');
     // trash + restore
-    await page.locator('.doc-card .btn.icon').first().click(); await page.click('.popover .menu-item:has-text("Move to trash")'); await page.waitForTimeout(500);
+    await page.locator('.doc-card .btn.icon').first().click(); await page.click('.popover .menu-item:has-text("Move to trash")'); await page.waitForFunction(() => document.querySelectorAll('.doc-card').length === 0, null, { timeout: 8000 }).catch(() => undefined);
     await page.click('.lib-side .item:has-text("Trash")');
     assert((await page.locator('.doc-card').count()) === 1, 'in the trash');
-    await page.locator('.doc-card .btn.icon').first().click(); await page.click('.popover .menu-item:has-text("Restore")'); await page.waitForTimeout(500);
+    await page.locator('.doc-card .btn.icon').first().click(); await page.click('.popover .menu-item:has-text("Restore")'); await page.waitForFunction(() => document.querySelectorAll('.doc-card').length === 0, null, { timeout: 8000 }).catch(() => undefined);
     await page.click('.lib-side .item:has-text("All documents")');
+    await page.waitForFunction(() => document.querySelectorAll('.doc-card').length === 2, null, { timeout: 8000 }).catch(() => undefined);
     assert((await page.locator('.doc-card').count()) === 2, 'restored');
     await page.fill('.lib-top input[placeholder^="Search"]', 'copy'); await page.waitForTimeout(150);
     assert((await page.locator('.doc-card').count()) === 1, 'search filters by title');
@@ -108,17 +115,40 @@ export async function ui({ page, rep, shot, assert, helpers: h }) {
     await shot('63-properties');
   });
 
-  await rep.step('pages panel and paper templates (Libraries ▸ Paper)', async () => {
+  await rep.step('pages panel and library shapes (Libraries ▸ Shapes)', async () => {
+    await h.cmd(page, 'page.add');
+    assert((await h.ev(page, (ed) => ed.doc.pages.length)) === 2, 'a second page was added');
+    await page.waitForSelector('.sidebar .thumb-page'); assert((await page.locator('.sidebar .thumb-page').count()) === 2, 'pages panel lists both pages');
+    await shot('64-pages');
     await page.click('.dock-tab[title="Libraries"]'); await page.waitForTimeout(150);
-    await page.click('.seg button:has-text("Paper")'); await page.waitForTimeout(250);
-    await page.locator('.tpl-card:has-text("Grid (5 mm)") .btn:has-text("This page")').click(); await page.waitForTimeout(250);
-    assert((await h.ev(page, (ed) => ed.page.background.template?.kind)) === 'grid', 'grid template applied to the page');
-    await page.locator('.tpl-card:has-text("Dot grid") .btn:has-text("New page")').click(); await page.waitForTimeout(300);
-    assert((await h.ev(page, (ed) => ed.doc.pages.length)) === 2 && (await h.ev(page, (ed) => ed.page.background.template?.kind)) === 'dots', 'new page with dot grid');
-    await shot('64-templates');
     await page.click('.seg button:has-text("Shapes")'); await page.waitForTimeout(150);
     await page.locator('.preset[title^="Heart"]').click(); await page.waitForTimeout(250);
     const heart = await h.ev(page, (ed) => ed.page.layers.flatMap((l) => l.type === 'vector' ? l.objects : []).find((o) => o.name === 'Heart'));
     assert(heart && heart.type === 'path', 'library shape inserted as an editable path');
   });
+
+  await rep.step('home screen shows the painting; it hides with the cross, comes back from Preferences, and also heads the About box', async () => {
+    const page = await newPage(browser);
+    await page.goto(h.url); await page.waitForSelector('.library');
+    await page.waitForSelector('.library .hero img', { timeout: 8000 });
+    const loaded = await page.evaluate(() => { const i = document.querySelector('.hero img'); return i.complete && i.naturalWidth >= 1900; });
+    assert(loaded, 'the painting file loads at 1920 px');
+    await page.fill('.lib-top input.input', 'zzz'); await page.waitForTimeout(150);
+    assert((await page.locator('.hero').count()) === 0, 'searching hides the banner');
+    await page.fill('.lib-top input.input', ''); await page.waitForSelector('.hero');
+    await h.cmd(page, 'help.about'); await page.waitForSelector('.about-art img');
+    assert(await page.evaluate(() => document.querySelector('.about-art img').naturalWidth >= 1900), 'the About box shows it too');
+    assert((await page.textContent('.dialog')).includes('Version 1.'), 'About shows the real version number');
+    await page.click('.dialog-f .btn.primary'); await page.waitForTimeout(150);
+    await page.click('.hero .x'); await page.waitForTimeout(200);
+    assert((await page.locator('.hero').count()) === 0, 'the cross hides the picture');
+    await h.cmd(page, 'edit.prefs'); await page.waitForSelector('.dialog');
+    await page.click('.dialog label:has-text("Show the painting on the home screen")'); await page.waitForTimeout(150);
+    await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.querySelector('.dialog'), null, { timeout: 4000 }).catch(() => undefined);
+    await page.waitForSelector('.hero', { timeout: 4000 });
+    const small = await newPage(browser, { width: 390, height: 780 }); await small.goto(h.url); await small.waitForSelector('.library'); await small.waitForTimeout(300);
+    assert(!(await small.locator('.hero').isVisible()), 'on a phone-sized screen the banner stays out of the way');
+    await small.context().close(); await page.context().close();
+  });
+
 }

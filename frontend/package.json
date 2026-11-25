@@ -1,6 +1,6 @@
 {
   "name": "quarc-draw",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Quarc Draw — a professional layered raster + vector drawing app by QuarcNet.",
   "type": "module",
@@ -13,7 +13,7 @@
     "test:e2e": "node tests/e2e/run.mjs",
     "server": "cd ../backend && node src/index.mjs --dev-auth",
     "icons": "node scripts/gen-icons.mjs",
-    "perf": "node tests/e2e/perf.mjs"
+    "perf": "node tests/e2e/perf-fps.mjs"
   },
   "dependencies": {
     "ag-psd": "^34.2.3",
@@ -21,8 +21,6 @@
     "jszip": "^3.10.1",
     "paper": "^0.12.18",
     "pdf-lib": "^1.17.1",
-    "pdfjs-dist": "^6.5.438",
-    "perfect-freehand": "^1.2.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

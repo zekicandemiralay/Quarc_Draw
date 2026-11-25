@@ -7,7 +7,6 @@ import { Emitter } from '../core/util';
 export interface LibraryMeta {
   id: string;
   title: string;
-  kind: 'drawing' | 'notebook' | 'pdf' | 'whiteboard';
   created: number;
   modified: number;
   pages: number;
@@ -86,7 +85,7 @@ export async function saveEditor(ed: Editor, opts: { markSyncDirty?: boolean } =
   const prev = await getMeta(doc.id);
   const thumb = await readThumbnail(blob);
   const meta: LibraryMeta = {
-    id: doc.id, title: doc.title, kind: doc.kind, created: doc.created, modified: Date.now(), pages: doc.pages.length, bytes: blob.size, thumb,
+    id: doc.id, title: doc.title, created: doc.created, modified: Date.now(), pages: doc.pages.length, bytes: blob.size, thumb,
     folder: doc.folder, tags: doc.tags, starred: doc.starred, trashed: prev?.trashed ?? 0,
     syncDirty: opts.markSyncDirty === false ? prev?.syncDirty : true, syncedAt: prev?.syncedAt, syncRev: prev?.syncRev,
   };

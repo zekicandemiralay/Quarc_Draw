@@ -94,15 +94,6 @@ done
 C=$(curl -sk -o /dev/null -w "%{http_code}" --max-time 5 "${BASE}/some/app/route" 2>/dev/null || echo 0)
 [ "$C" = "200" ] && ok "app routes fall back to index.html" || fail "/some/app/route returned ${C} (nginx should fall back to index.html)"
 
-# The pdf.js worker is a module script: it must be served as JavaScript.
-WORKER=$(dexec frontend sh -c 'ls /usr/share/nginx/html/assets | grep "^pdf.worker" | head -1')
-if [ -n "$WORKER" ]; then
-  CT=$(curl -sk -o /dev/null -w "%{content_type}" --max-time 5 "${BASE}/assets/${WORKER}" 2>/dev/null)
-  case "$CT" in *javascript*) ok "pdf.js worker served as JavaScript ($CT)";; *) fail "pdf.js worker served as '${CT}' — PDFs will not open";; esac
-else
-  warn "pdf.js worker not found in the build"
-fi
-
 # ════════════════════════════════════════════════════════════════════════
 hdr "Shared login (JWT)"
 # ════════════════════════════════════════════════════════════════════════

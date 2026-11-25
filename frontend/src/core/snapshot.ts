@@ -2,7 +2,7 @@
 // Vector objects are immutable and RasterSurfaces are shared by reference, so a snapshot only
 // copies the layer tree skeleton + object arrays (O(#layers + #objects) references).
 
-import type { Layer, Page, QDocument, PageLayout, OutlineItem } from './model';
+import type { Layer, Page, QDocument, PageLayout } from './model';
 
 export function cloneLayer(l: Layer): Layer {
   const base = { ...l, effects: l.effects.map((e) => ({ ...e })) } as Layer;
@@ -17,7 +17,7 @@ export function cloneLayer(l: Layer): Layer {
 export function clonePage(p: Page): Page {
   return {
     ...p,
-    background: { ...p.background, template: p.background.template ? { ...p.background.template } : null, image: p.background.image ? { ...p.background.image } : null },
+    background: { ...p.background, image: p.background.image ? { ...p.background.image } : null },
     layers: p.layers.map(cloneLayer),
     guides: p.guides.map((g) => ({ ...g })),
   };
@@ -28,7 +28,6 @@ export interface DocSnapshot {
   all: boolean;
   pages: Page[];
   layout: PageLayout;
-  outline: OutlineItem[];
   title: string;
   cost: number;
 }
@@ -43,7 +42,7 @@ function costOf(pages: Page[]): number {
 /** `pageIds` limits the snapshot to the given pages; omit for a full snapshot (needed for add/remove/reorder). */
 export function snapshotDoc(doc: QDocument, pageIds?: string[]): DocSnapshot {
   const pages = (pageIds ? doc.pages.filter((p) => pageIds.includes(p.id)) : doc.pages).map(clonePage);
-  return { all: !pageIds, pages, layout: doc.layout, outline: doc.outline, title: doc.title, cost: costOf(pages) };
+  return { all: !pageIds, pages, layout: doc.layout, title: doc.title, cost: costOf(pages) };
 }
 export function restoreDoc(doc: QDocument, s: DocSnapshot) {
   if (s.all) doc.pages = s.pages.map(clonePage);
@@ -54,7 +53,6 @@ export function restoreDoc(doc: QDocument, s: DocSnapshot) {
     }
   }
   doc.layout = s.layout;
-  doc.outline = s.outline;
   doc.title = s.title;
   doc.modified = Date.now();
 }

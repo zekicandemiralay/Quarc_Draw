@@ -6,7 +6,6 @@ import { Selection } from '../../src/core/selection';
 import { floodMask } from '../../src/core/floodfill';
 import { History } from '../../src/core/history';
 import { parsePathData } from '../../src/io/svg';
-import { recognizeShape } from '../../src/core/shapeRecognize';
 import { TransformBox } from '../../src/tools/transformBox';
 
 describe('geometry', () => {
@@ -228,27 +227,6 @@ describe('svg path parser', () => {
   it('compact number formats', () => {
     const p = parsePathData('M.5.5L1e1-2');
     expect(p[0].nodes[0].x).toBeCloseTo(0.5); expect(p[0].nodes[1].x).toBe(10); expect(p[0].nodes[1].y).toBe(-2);
-  });
-});
-
-describe('shape recognition', () => {
-  const circle = Array.from({ length: 60 }, (_, i) => ({ x: 100 + 50 * Math.cos((i / 60) * Math.PI * 2), y: 100 + 50 * Math.sin((i / 60) * Math.PI * 2) + (i % 3) * 0.5 }));
-  it('line', () => {
-    const line = Array.from({ length: 30 }, (_, i) => ({ x: i * 5, y: 40 + (i % 2) * 0.8 }));
-    expect(recognizeShape(line)?.kind).toBe('line');
-  });
-  it('ellipse', () => { expect(recognizeShape(circle)?.kind).toBe('ellipse'); });
-  it('rectangle', () => {
-    const pts: { x: number; y: number }[] = [];
-    for (let i = 0; i <= 20; i++) pts.push({ x: 20 + i * 8, y: 20 });
-    for (let i = 0; i <= 20; i++) pts.push({ x: 180, y: 20 + i * 5 });
-    for (let i = 0; i <= 20; i++) pts.push({ x: 180 - i * 8, y: 120 });
-    for (let i = 0; i <= 20; i++) pts.push({ x: 20, y: 120 - i * 5 });
-    expect(recognizeShape(pts)?.kind).toBe('rect');
-  });
-  it('rejects scribbles', () => {
-    const scribble = Array.from({ length: 40 }, (_, i) => ({ x: i * 3, y: Math.sin(i) * 30 }));
-    expect(recognizeShape(scribble)).toBeNull();
   });
 });
 

@@ -192,7 +192,7 @@ class SyncEngine {
     const f = await p.get(R.id);
     const m = await peekMeta(f.blob);
     const meta: LibraryMeta = {
-      id: R.id, title: m.title, kind: m.kind, created: m.created, modified: m.modified, pages: m.pages, bytes: f.blob.size, thumb: m.thumb,
+      id: R.id, title: m.title, created: m.created, modified: m.modified, pages: m.pages, bytes: f.blob.size, thumb: m.thumb,
       folder: m.folder, tags: m.tags, starred: m.starred, trashed: 0, syncRev: f.rev, syncDirty: false, syncedAt: Date.now(),
     };
     await putRecord(meta, f.blob);
@@ -216,7 +216,7 @@ class SyncEngine {
     copyDoc.title = `${copyDoc.title} (conflict – ${localNewer ? 'other device' : device}, ${stamp})`;
     const copyBlob = await serializeDoc(copyDoc);
     const cm = await peekMeta(copyBlob);
-    await putRecord({ id: copyDoc.id, title: copyDoc.title, kind: cm.kind, created: cm.created, modified: Date.now(), pages: cm.pages, bytes: copyBlob.size, thumb: cm.thumb, folder: cm.folder, tags: cm.tags, starred: false, trashed: 0, syncDirty: true }, copyBlob);
+    await putRecord({ id: copyDoc.id, title: copyDoc.title, created: cm.created, modified: Date.now(), pages: cm.pages, bytes: copyBlob.size, thumb: cm.thumb, folder: cm.folder, tags: cm.tags, starred: false, trashed: 0, syncDirty: true }, copyBlob);
     const st = this.status.get(); this.set({ conflicts: st.conflicts + 1 });
     this.again = true; // the conflict copy is a new document – upload it in the next round
     this.log(`Conflict on “${L.title}” — kept both versions`);
@@ -241,8 +241,6 @@ class SyncEngine {
     if (ed.dirty) return; // edits not yet saved locally; they will conflict on the next round
     try {
       const doc = await parseDoc(blob);
-      const { ensurePdfSource } = await import('../pdf/pdfIO');
-      await ensurePdfSource(doc);
       ed.replaceDocument(doc);
       toast(`“${doc.title}” was updated from sync`, 'info');
     } catch (e) { console.warn('could not refresh open document', e); }

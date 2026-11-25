@@ -8,7 +8,7 @@ import { Icon } from './icons';
 import { MenuList, MenuEntry, Popover } from './common';
 import { NewDocDialog, ExportDialog, ImageSizeDialog } from './dialogs/DocDialogs';
 import { FilterDialog, AdjustDialog, EffectsDialog, GradientDialog } from './dialogs/FxDialogs';
-import { PromptDialog, PrefsDialog, ShortcutsDialog, AboutDialog, SyncDialog, PageSetupDialog, NoteDialog, DocInfoDialog, SignatureDialog, TourDialog, PresentDialog } from './dialogs/SysDialogs';
+import { PromptDialog, PrefsDialog, ShortcutsDialog, AboutDialog, SyncDialog, PageSetupDialog, DocInfoDialog, TourDialog } from './dialogs/SysDialogs';
 import { Dialog } from './common';
 import { BrushEditor } from './panels/BrushesPanel';
 
@@ -42,11 +42,8 @@ export function DialogHost() {
           case 'about': return <AboutDialog key={d.key} onClose={onClose} />;
           case 'sync': return <SyncDialog key={d.key} onClose={onClose} />;
           case 'page-setup': return <PageSetupDialog key={d.key} ed={ed!} onClose={onClose} />;
-          case 'note': return <NoteDialog key={d.key} ed={workspace.editors.find((e) => e.id === d.payload.editorId) ?? ed!} objId={d.payload.objId} onClose={onClose} />;
           case 'doc-info': return <DocInfoDialog key={d.key} ed={ed!} onClose={onClose} />;
-          case 'signature': return <SignatureDialog key={d.key} onClose={onClose} />;
           case 'tutorial': return <TourDialog key={d.key} onClose={onClose} />;
-          case 'present': return <PresentDialog key={d.key} ed={ed!} onClose={onClose} />;
           case 'brush-editor': return <Dialog key={d.key} title="Brush settings" icon="brush" onClose={onClose} footer={<button className="btn primary" onClick={onClose}>Done</button>}><BrushEditor ed={ed!} /></Dialog>;
           default: return null;
         }

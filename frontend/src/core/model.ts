@@ -56,7 +56,6 @@ export const defaultStroke = (color = '#000000', width = 2): StrokeStyle => ({ c
 // ---------------- Vector objects ----------------
 export interface PathNode { x: number; y: number; ix: number; iy: number; ox: number; oy: number }
 export interface SubPath { nodes: PathNode[]; closed: boolean }
-export interface LinkInfo { url?: string; page?: number }
 export interface ShadowInfo { color: string; blur: number; x: number; y: number }
 
 interface VBase {
@@ -69,7 +68,6 @@ interface VBase {
   blend?: BlendMode;
   hidden?: boolean;
   locked?: boolean;
-  link?: LinkInfo;
   shadow?: ShadowInfo;
 }
 export interface VPath extends VBase { type: 'path'; paths: SubPath[]; fillRule: 'nonzero' | 'evenodd' }
@@ -83,18 +81,9 @@ export interface VText extends VBase {
   lineHeight: number; letterSpacing: number; boxW: number | null; underline: boolean; strike: boolean;
 }
 export interface VImage extends VBase { type: 'image'; assetId: string; x: number; y: number; w: number; h: number }
-export type InkKind = 'pen' | 'fountain' | 'pencil' | 'highlighter' | 'marker' | 'brush' | 'calligraphy';
-export interface VInk extends VBase {
-  type: 'ink'; pts: number[]; // x,y,pressure triples
-  ink: InkKind; size: number; thinning: number; smoothing: number; streamline: number;
-  taperStart: number; taperEnd: number; cap: boolean; simulatePressure: boolean;
-}
-export interface VNote extends VBase { type: 'note'; x: number; y: number; w: number; h: number; text: string; color: string; collapsed: boolean }
-export type MarkupKind = 'highlight' | 'underline' | 'strike' | 'squiggle';
-export interface VMarkup extends VBase { type: 'markup'; kind: MarkupKind; quads: number[][]; color: string; quote: string; comment: string }
 export interface VGroup extends VBase { type: 'group'; children: VObject[] }
 
-export type VObject = VPath | VRect | VEllipse | VPolygon | VLine | VText | VImage | VInk | VNote | VMarkup | VGroup;
+export type VObject = VPath | VRect | VEllipse | VPolygon | VLine | VText | VImage | VGroup;
 export type VObjectType = VObject['type'];
 
 export const baseObject = (): Omit<VBase, 'id'> => ({ tf: IDENTITY, fill: solid('#000000'), stroke: null, opacity: 1 });
@@ -192,12 +181,8 @@ export const createGroupLayer = (name = 'Group', children: Layer[] = []): GroupL
 export const createAdjustmentLayer = (adj: Adjustment): AdjustmentLayer => ({ ...layerBase(ADJUSTMENT_LABELS[adj.kind]), type: 'adjustment', adj });
 
 // ---------------- Page ----------------
-export type TemplateKind = 'lined' | 'grid' | 'dots' | 'isometric' | 'cornell' | 'music' | 'checklist' | 'planner' | 'graph' | 'hex' | 'storyboard';
-export interface TemplateSpec { kind: TemplateKind; spacing: number; color: string; margin: boolean; opacity?: number }
 export interface PageBackground {
   color: string | null; // null = transparent
-  template: TemplateSpec | null;
-  pdfPage: number | null; // index into doc.pdf
   image?: { assetId: string; fit: 'cover' | 'contain' | 'stretch' } | null;
 }
 export interface Guide { id: string; axis: 'h' | 'v'; pos: number }
@@ -211,24 +196,20 @@ export interface Page {
   background: PageBackground;
   layers: Layer[];
   guides: Guide[];
-  infinite: boolean;
-  bookmark: boolean;
-  label: string;
 }
 export const createPage = (w: number, h: number, name = 'Page', bg: Partial<PageBackground> = {}): Page => ({
   id: uid('pg'), name, width: w, height: h, x: 0, y: 0,
-  background: { color: '#ffffff', template: null, pdfPage: null, image: null, ...bg },
-  layers: [], guides: [], infinite: false, bookmark: false, label: '',
+  background: { color: '#ffffff', image: null, ...bg },
+  layers: [], guides: [],
 });
 
 // ---------------- Document ----------------
 export type PageLayout = 'single' | 'vertical' | 'horizontal' | 'spread' | 'grid' | 'free';
 export type Units = 'px' | 'in' | 'cm' | 'mm' | 'pt';
-export interface AssetRecord { id: string; name: string; mime: string; kind: 'image' | 'pdf' | 'font' | 'audio' | 'other'; blob: Blob }
+export interface AssetRecord { id: string; name: string; mime: string; kind: 'image' | 'font' | 'other'; blob: Blob }
 export interface SymmetrySettings { enabled: boolean; mode: 'vertical' | 'horizontal' | 'both' | 'radial'; axes: number; cx: number; cy: number }
 export interface GridSettings { show: boolean; snap: boolean; size: number; subdivisions: number; kind: 'square' | 'isometric' }
 export interface PerspectiveSettings { enabled: boolean; points: { x: number; y: number }[]; snap: boolean }
-export interface OutlineItem { title: string; page: number; children: OutlineItem[] }
 export interface QDocument {
   id: string;
   title: string;
@@ -239,24 +220,21 @@ export interface QDocument {
   pages: Page[];
   layout: PageLayout;
   assets: Map<string, AssetRecord>;
-  pdfAssetId: string | null;
-  outline: OutlineItem[];
   tags: string[];
   folder: string | null;
   starred: boolean;
   grid: GridSettings;
   symmetry: SymmetrySettings;
   perspective: PerspectiveSettings;
-  kind: 'drawing' | 'notebook' | 'pdf' | 'whiteboard';
   author: string;
 }
-export const createDocument = (title = 'Untitled', kind: QDocument['kind'] = 'drawing'): QDocument => ({
+export const createDocument = (title = 'Untitled'): QDocument => ({
   id: uid('doc'), title, created: Date.now(), modified: Date.now(), dpi: 96, units: 'px',
-  pages: [], layout: 'single', assets: new Map(), pdfAssetId: null, outline: [], tags: [], folder: null, starred: false,
+  pages: [], layout: 'single', assets: new Map(), tags: [], folder: null, starred: false,
   grid: { show: false, snap: false, size: 64, subdivisions: 4, kind: 'square' },
   symmetry: { enabled: false, mode: 'vertical', axes: 6, cx: 0, cy: 0 },
   perspective: { enabled: false, points: [], snap: true },
-  kind, author: '',
+  author: '',
 });
 
 // ---------------- Traversal helpers ----------------
@@ -331,7 +309,6 @@ export const SIZE_PRESETS: SizePreset[] = [
   { id: 'sketch', name: 'Sketchbook 3000 × 2000', w: 3000, h: 2000, group: 'Art' },
   { id: 'pixel', name: 'Pixel Art 128 × 128', w: 128, h: 128, group: 'Art' },
 ];
-export const NOTE_PAGE = { w: 1240, h: 1754, dpi: 150 }; // A4 @150dpi
 
 export const unitFactor = (u: Units, dpi: number): number => // px per 1 unit
   u === 'px' ? 1 : u === 'in' ? dpi : u === 'cm' ? dpi / 2.54 : u === 'mm' ? dpi / 25.4 : dpi / 72;

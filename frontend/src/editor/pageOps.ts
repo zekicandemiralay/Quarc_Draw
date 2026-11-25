@@ -26,15 +26,13 @@ function mapContent(layers: Layer[], mapSurface: (s: RasterSurface) => RasterSur
   });
 }
 
-export function addPage(ed: Editor, o: { after?: number; width?: number; height?: number; template?: PageBackground['template']; color?: string | null; blank?: boolean } = {}): Page {
+export function addPage(ed: Editor, o: { after?: number; width?: number; height?: number; color?: string | null; blank?: boolean } = {}): Page {
   const ref = ed.page;
   const w = o.width ?? ref.width, h = o.height ?? ref.height;
   const p = createPage(w, h, `Page ${ed.doc.pages.length + 1}`, {
     color: o.color === undefined ? ref.background.color : o.color,
-    template: o.template === undefined ? (ref.background.template ? { ...ref.background.template } : null) : o.template,
   });
   p.layers.push(createRasterLayer('Layer 1', w, h));
-  if (ed.doc.kind === 'notebook' || ed.doc.kind === 'pdf') p.layers.push(createVectorLayer('Ink'));
   const idx = (o.after ?? ed.pageIndex) + 1;
   ed.transact('Add page', () => { ed.doc.pages.splice(idx, 0, p); }, { pages: 'all' });
   ed.setActivePage(p.id);
@@ -45,7 +43,7 @@ export function duplicatePage(ed: Editor, index = ed.pageIndex): Page | null {
   const src = ed.doc.pages[index];
   if (!src) return null;
   const c = clonePage(src);
-  c.id = uid('pg'); c.name = src.name + ' copy'; c.bookmark = false;
+  c.id = uid('pg'); c.name = src.name + ' copy';
   const dupLayer = (l: Layer): Layer => {
     const n = { ...l, id: uid('ly') } as Layer;
     if (n.type === 'raster' && l.type === 'raster') n.surface = l.surface.clone();
@@ -73,9 +71,6 @@ export function movePage(ed: Editor, from: number, to: number) {
 }
 export function renamePage(ed: Editor, index: number, name: string) {
   ed.transact('Rename page', () => { ed.doc.pages[index].name = name; }, { pages: [ed.doc.pages[index].id], coalesce: `pname:${index}` });
-}
-export function toggleBookmark(ed: Editor, index = ed.pageIndex) {
-  ed.transact('Bookmark', () => { const p = ed.doc.pages[index]; p.bookmark = !p.bookmark; }, { pages: [ed.doc.pages[index].id] });
 }
 export function setPageBackground(ed: Editor, patch: Partial<PageBackground>, all = false) {
   const ids = all ? ed.doc.pages.map((p) => p.id) : [ed.page.id];

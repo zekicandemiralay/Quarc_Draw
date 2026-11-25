@@ -5,10 +5,8 @@ import { Dialog, NumInput, Seg, Slider, Field, Switch } from '../common';
 import { Icon } from '../icons';
 import { ColorButton } from '../ColorPicker';
 import type { Editor } from '../../editor/editor';
-import { SIZE_PRESETS, NOTE_PAGE, unitFactor, Units } from '../../core/model';
-import { TEMPLATES, drawTemplate, makeTemplate } from '../../core/templates';
-import { createDrawing, createNotebook, createWhiteboard, openFileDialog, pickFiles, openFiles } from '../../app/actions';
-import { prefs } from '../../app/store';
+import { SIZE_PRESETS, unitFactor, Units } from '../../core/model';
+import { createDrawing } from '../../app/actions';
 import { newDocument } from '../../editor/editor';
 import { workspace } from '../../app/workspace';
 import { exportDocument, defaultExportOptions, ExportOptions, ExportFormat, FORMAT_INFO } from '../../io/exporters';
@@ -19,69 +17,36 @@ import * as P from '../../editor/pageOps';
 import type { Anchor } from '../../editor/pageOps';
 
 // ------------------------------------------------------------------ New
-function TemplateCanvas({ idx, color }: { idx: number; color: string }) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  useEffect(() => { const c = ref.current!, x = c.getContext('2d')!; x.fillStyle = color; x.fillRect(0, 0, c.width, c.height); const k = c.width / 1240; x.save(); x.scale(k, k); drawTemplate(x, makeTemplate(TEMPLATES[idx]), 1240, 1754, k); x.restore(); }, [idx, color]);
-  return <canvas ref={ref} width={120} height={170} />;
-}
-
 export function NewDocDialog({ onClose }: { onClose: () => void }) {
-  const [tab, setTab] = useState<'drawing' | 'notebook' | 'pdf' | 'whiteboard'>(prefs.get().workspace === 'studio' ? 'drawing' : prefs.get().workspace === 'reader' ? 'pdf' : 'notebook');
   const [preset, setPreset] = useState('hd');
   const [w, setW] = useState(1920), [h, setH] = useState(1080), [dpi, setDpi] = useState(96);
   const [bg, setBg] = useState<string>('#ffffff'), [transparent, setTransparent] = useState(false);
   const [title, setTitle] = useState('Untitled');
-  const [tpl, setTpl] = useState(0), [pages, setPages] = useState(1), [paper, setPaper] = useState('#fffdf8');
   const groups = useMemo(() => [...new Set(SIZE_PRESETS.map((p) => p.group))], []);
   const pick = (id: string) => { const p = SIZE_PRESETS.find((x) => x.id === id)!; setPreset(id); setW(p.w); setH(p.h); setDpi(p.dpi ?? 96); };
   const create = () => {
-    if (tab === 'drawing') createDrawing({ title: title || 'Untitled', width: Math.round(w), height: Math.round(h), dpi, background: transparent ? null : bg });
-    else if (tab === 'notebook') createNotebook({ title: title === 'Untitled' ? 'Notebook' : title, templateIndex: tpl, pages, color: paper });
-    else if (tab === 'whiteboard') createWhiteboard(title === 'Untitled' ? 'Whiteboard' : title);
+    createDrawing({ title: title || 'Untitled', width: Math.round(w), height: Math.round(h), dpi, background: transparent ? null : bg });
     onClose();
   };
   return (
-    <Dialog title="New" icon="file-plus" size="wide" onClose={onClose} footer={<>
+    <Dialog title="New drawing" icon="file-plus" size="wide" onClose={onClose} footer={<>
       <button className="btn" onClick={onClose}>Cancel</button>
-      {tab !== 'pdf' && <button className="btn primary" onClick={create}><Icon name="check" size={15} />Create</button>}
+      <button className="btn primary" onClick={create}><Icon name="check" size={15} />Create</button>
     </>}>
       <div className="col" style={{ gap: 14 }}>
-        <Seg value={tab} onChange={setTab} options={[{ value: 'drawing', label: 'Drawing', icon: 'palette' }, { value: 'notebook', label: 'Notebook', icon: 'page' }, { value: 'pdf', label: 'PDF / document', icon: 'file' }, { value: 'whiteboard', label: 'Whiteboard', icon: 'present' }]} />
-        {tab !== 'pdf' && <Field label="Name"><input className="input grow" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.stopPropagation()} /></Field>}
-        {tab === 'drawing' && (<>
-          {groups.map((g) => (
-            <div key={g}><div className="hint" style={{ marginBottom: 4 }}>{g}</div>
-              <div className="preset-grid">{SIZE_PRESETS.filter((p) => p.group === g).map((p) => <button key={p.id} className={`preset ${preset === p.id ? 'on' : ''}`} onClick={() => pick(p.id)}><div>{p.name.split(' · ')[0].replace(/ \d+ × \d+/, '')}</div><div className="sz">{p.w} × {p.h}{p.dpi ? ` · ${p.dpi} dpi` : ''}</div></button>)}</div></div>
-          ))}
-          <div className="divider" style={{ margin: 0 }} />
-          <div className="row wrap" style={{ gap: 14 }}>
-            <Field label="Width"><NumInput value={w} onChange={(v) => { setW(v); setPreset(''); }} min={1} max={16000} width={80} decimals={0} suffix="px" /></Field>
-            <Field label="Height"><NumInput value={h} onChange={(v) => { setH(v); setPreset(''); }} min={1} max={16000} width={80} decimals={0} suffix="px" /></Field>
-            <Field label="Resolution"><NumInput value={dpi} onChange={setDpi} min={30} max={1200} width={70} decimals={0} suffix="dpi" /></Field>
-            <Field label="Background"><ColorButton color={bg} onChange={setBg} alpha={false} /><Switch on={transparent} onChange={setTransparent} label="Transparent" /></Field>
-          </div>
-          <div className="hint">{(w * h / 1e6).toFixed(1)} megapixels · each pixel layer uses about {formatBytes(w * h * 4)} of memory · {(w / dpi).toFixed(1)} × {(h / dpi).toFixed(1)} in at {dpi} dpi</div>
-        </>)}
-        {tab === 'notebook' && (<>
-          <div className="hint">Pick a paper style. Notebook pages are A4 at 150 dpi with a vector ink layer — perfect for handwriting, and you can change the paper any time.</div>
-          <div className="preset-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))' }}>
-            {TEMPLATES.map((t, i) => <div key={i} className={`tpl-card ${tpl === i ? 'on' : ''}`} onClick={() => setTpl(i)}><TemplateCanvas idx={i} color={paper} />{t.label}</div>)}
-          </div>
-          <div className="row wrap" style={{ gap: 14 }}>
-            <Field label="Pages"><NumInput value={pages} onChange={setPages} min={1} max={200} width={60} decimals={0} /></Field>
-            <Field label="Paper colour">{['#fffdf8', '#ffffff', '#f6f1e4', '#eaf3ff', '#2b2d33'].map((c) => <button key={c} className="swatch" style={{ background: c, outline: paper === c ? '2px solid var(--accent)' : undefined }} onClick={() => setPaper(c)} />)}<ColorButton color={paper} onChange={setPaper} alpha={false} /></Field>
-            <span className="hint">{NOTE_PAGE.w} × {NOTE_PAGE.h} px</span>
-          </div>
-        </>)}
-        {tab === 'pdf' && (
-          <div className="col" style={{ alignItems: 'center', gap: 12, padding: '24px 0' }}>
-            <Icon name="file" size={52} style={{ opacity: 0.4 }} />
-            <div style={{ textAlign: 'center' }}>Open a PDF to read, highlight, annotate, sign and export it.<br /><span className="hint">Pages stay vector-sharp; your marks live on top and can be exported into the original PDF.</span></div>
-            <button className="btn primary" onClick={async () => { const f = await pickFiles('.pdf', true); if (f.length) { onClose(); await openFiles(f); } }}><Icon name="upload" size={15} />Choose PDF…</button>
-            <button className="btn" onClick={() => { onClose(); void openFileDialog(); }}>Or open any supported file…</button>
-          </div>
-        )}
-        {tab === 'whiteboard' && <div className="hint" style={{ padding: '10px 0' }}>An open, zoomable board for sketching ideas with vector ink, shapes, sticky notes and images. Ink stays sharp at any zoom level.</div>}
+        <Field label="Name"><input className="input grow" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.stopPropagation()} /></Field>
+        {groups.map((g) => (
+          <div key={g}><div className="hint" style={{ marginBottom: 4 }}>{g}</div>
+            <div className="preset-grid">{SIZE_PRESETS.filter((p) => p.group === g).map((p) => <button key={p.id} className={`preset ${preset === p.id ? 'on' : ''}`} onClick={() => pick(p.id)}><div>{p.name.split(' · ')[0].replace(/ \d+ × \d+/, '')}</div><div className="sz">{p.w} × {p.h}{p.dpi ? ` · ${p.dpi} dpi` : ''}</div></button>)}</div></div>
+        ))}
+        <div className="divider" style={{ margin: 0 }} />
+        <div className="row wrap" style={{ gap: 14 }}>
+          <Field label="Width"><NumInput value={w} onChange={(v) => { setW(v); setPreset(''); }} min={1} max={16000} width={80} decimals={0} suffix="px" /></Field>
+          <Field label="Height"><NumInput value={h} onChange={(v) => { setH(v); setPreset(''); }} min={1} max={16000} width={80} decimals={0} suffix="px" /></Field>
+          <Field label="Resolution"><NumInput value={dpi} onChange={setDpi} min={30} max={1200} width={70} decimals={0} suffix="dpi" /></Field>
+          <Field label="Background"><ColorButton color={bg} onChange={setBg} alpha={false} /><Switch on={transparent} onChange={setTransparent} label="Transparent" /></Field>
+        </div>
+        <div className="hint">{(w * h / 1e6).toFixed(1)} megapixels · each pixel layer uses about {formatBytes(w * h * 4)} of memory · {(w / dpi).toFixed(1)} × {(h / dpi).toFixed(1)} in at {dpi} dpi</div>
       </div>
     </Dialog>
   );
@@ -89,7 +54,7 @@ export function NewDocDialog({ onClose }: { onClose: () => void }) {
 
 // ------------------------------------------------------------------ Export
 export function ExportDialog({ ed, onClose }: { ed: Editor; onClose: () => void }) {
-  const [o, setO] = useState<ExportOptions>(() => ({ ...defaultExportOptions(), format: ed.doc.kind === 'pdf' ? 'pdf' : 'png', pdfMode: ed.doc.kind === 'pdf' ? 'annotated-original' : 'pages', scope: ed.doc.pages.length > 1 ? 'all' : 'page' }));
+  const [o, setO] = useState<ExportOptions>(() => ({ ...defaultExportOptions(), format: 'png', scope: ed.doc.pages.length > 1 ? 'all' : 'page' }));
   const [busy, setBusy] = useState(false);
   const [est, setEst] = useState<string>('');
   const info = FORMAT_INFO[o.format];
@@ -131,7 +96,6 @@ export function ExportDialog({ ed, onClose }: { ed: Editor; onClose: () => void 
             {o.format !== 'qdraw' && o.format !== 'pdf' && <Field label="What"><select className="select grow" value={o.scope} onChange={(e) => set({ scope: e.target.value as any })}>
               <option value="page">Current page</option>{ed.doc.pages.length > 1 && <option value="all">All pages{o.format === 'gif' ? ' (animation)' : ' (zip)'}</option>}<option value="selection" disabled={!ed.hasSelection}>Selection only</option><option value="layers">Each layer separately (zip)</option></select></Field>}
             {o.format === 'pdf' && <Field label="Pages"><Seg value={o.scope === 'all' ? 'all' : 'page'} onChange={(v) => set({ scope: v })} options={[{ value: 'all', label: 'All' }, { value: 'page', label: 'Current' }]} /></Field>}
-            {o.format === 'pdf' && ed.doc.kind === 'pdf' && <Field label="Mode"><Seg value={o.pdfMode} onChange={(v) => set({ pdfMode: v })} options={[{ value: 'annotated-original', label: 'Annotate original' }, { value: 'pages', label: 'Flatten pages' }]} /></Field>}
             {!['svg', 'psd', 'ora', 'qdraw', 'ico'].includes(o.format) && <Slider label="Scale" value={o.scale} min={0.25} max={6} step={0.25} format={(v) => `${v}×`} onChange={(v) => set({ scale: v })} />}
             {info.lossy && <Slider label="Quality" value={o.quality} min={0.1} max={1} step={0.01} format={(v) => `${Math.round(v * 100)}%`} onChange={(v) => set({ quality: v })} />}
             {o.format === 'gif' && o.scope === 'all' && <Slider label="Speed" value={o.fps} min={1} max={30} format={(v) => `${v} fps`} onChange={(v) => set({ fps: v })} />}

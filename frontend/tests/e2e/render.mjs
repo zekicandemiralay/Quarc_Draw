@@ -174,4 +174,84 @@ export async function render({ page, rep, shot, assert, helpers: h }) {
     await h.ev(page, (ed) => { ed.history.jumpTo(ed.history.items.length); ed.changed('doc', 'layers'); });
     assert((await h.pixels(page)) === full, 'jumping forward restores everything');
   });
+
+  for (const view of ['plain view', 'rotated 28° and zoomed out']) await rep.step(`a stroke repaints only what it touches, and the screen matches a full repaint (${view})`, async () => {
+    await h.reset(page);
+    await h.ev(page, (ed, rotated) => { ed.view.resetRotation(); ed.fitPage(); if (rotated) { ed.view.rotateAt({ x: ed.view.width / 2, y: ed.view.height / 2 }, (28 * Math.PI) / 180); ed.view.zoomAt({ x: ed.view.width / 2, y: ed.view.height / 2 }, ed.view.zoom * 0.8); } ed.changed('view'); }, view !== 'plain view');
+    await page.waitForTimeout(150);
+    // layers: red, green (multiply) and four more below the empty layer we paint on, and a translucent blue overlay ABOVE it
+    for (const [i, col] of ['#ffee00', '#00eeff', '#ee00ff', '#888888'].entries()) await fillRect('under' + i, col, 100 + i * 120, 100 + i * 60, 300, 300);
+    await fillRect('red', '#ff0000', 300, 250, 500, 500);
+    const g = await fillRect('green', '#00ff00', 500, 300, 500, 500); await layer(g, { blend: 'multiply' });
+    const paint = await fillRect('paint', '#000000', 0, 0, 0, 0);
+    const top = await fillRect('top', '#3366ff', 250, 200, 900, 600); await layer(top, { blend: 'overlay', opacity: 0.6 });
+    await h.ev(page, (ed, id) => { ed.setActiveLayer(id); ed.setFg('#aa00ff'); ed.setBrushPreset('paint-hard-air'); ed.setBrush({ size: 36, hardness: 1, flow: 1, opacity: 1 }); }, paint);
+    const c = await h.center(page);
+    const r = await page.evaluate(async ([cx, cy]) => {
+      const el = document.querySelector('canvas.overlay'), main = document.querySelector('.viewport canvas:not(.overlay)'), rd = window.__quarc.renderer;
+      const mk = (type, x, y) => new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 5, pointerType: 'pen', isPrimary: true, clientX: cx + x, clientY: cy + y, pressure: type === 'pointerup' ? 0 : 0.6, buttons: type === 'pointerup' ? 0 : 1, button: 0 });
+      const frame = () => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+      let fullRenders = 0, rectRenders = 0;
+      const rf = rd.render.bind(rd), rr = rd.renderRect.bind(rd);
+      rd.render = () => { fullRenders++; return rf(); };
+      rd.renderRect = (...a) => { const ok = rr(...a); if (ok) rectRenders++; return ok; };
+      // Reading the canvas back can move it from GPU to CPU drawing, and the two blur the page's drop shadow a little differently
+      // (a few levels along the page edge). Settle that first, so that only the incremental repainting is under test.
+      main.getContext('2d').getImageData(0, 0, 1, 1); rd.render();
+      el.dispatchEvent(mk('pointerdown', -150, -40)); await frame();
+      for (let i = 1; i <= 40; i++) { el.dispatchEvent(mk('pointermove', -150 + i * 8, -40 + Math.sin(i / 5) * 60)); await frame(); }
+      const during = { fullRenders, rectRenders, cached: !!rd.cache };
+      const grab = () => main.getContext('2d').getImageData(0, 0, main.width, main.height).data;
+      const partial = grab();            // what the incremental repaints produced
+      rd.render = rf; rd.render();        // a full repaint of the very same state
+      const full = grab();
+      let maxDiff = 0, differing = 0, bx0 = 1e9, by0 = 1e9, bx1 = -1, by1 = -1, sample = null;
+      for (let i = 0; i < full.length; i++) {
+        const d = Math.abs(full[i] - partial[i]); if (d > maxDiff) maxDiff = d;
+        if (d > 3) { differing++; const px = (i >> 2) % main.width, py = Math.floor((i >> 2) / main.width); bx0 = Math.min(bx0, px); by0 = Math.min(by0, py); bx1 = Math.max(bx1, px); by1 = Math.max(by1, py); if (!sample) sample = { at: [px, py], full: Array.from(full.slice(i & ~3, (i & ~3) + 4)), partial: Array.from(partial.slice(i & ~3, (i & ~3) + 4)) }; }
+      }
+      const where = differing ? { box: [bx0, by0, bx1, by1], canvas: [main.width, main.height], sample } : null;
+      el.dispatchEvent(mk('pointerup', 120, -40)); await frame();
+      rd.renderRect = rr;
+      return { ...during, maxDiff, differing, where };
+    }, [c.x, c.y]);
+    assert(r.rectRenders >= 20, `the stroke used incremental repaints (${r.rectRenders}), not full ones (${r.fullRenders})`);
+    assert(r.cached, 'the layers under the stroke were cached after a few frames');
+    assert(r.differing === 0, `the screen after incremental repaints equals a full repaint to within 8-bit rounding (${r.differing} pixels differ by more than 3, max difference ${r.maxDiff}; ${JSON.stringify(r.where)})`);
+    assert((await h.pixels(page)) > 500, 'the stroke was committed to the layer');
+    await h.cmd(page, 'edit.undo'); assert((await h.pixels(page)) === 0, 'undo removes the stroke');
+    await h.cmd(page, 'edit.redo'); assert((await h.pixels(page)) > 500, 'redo brings it back (the after-pixels were captured at undo time)');
+    await h.ev(page, (ed) => { ed.view.resetRotation(); ed.fitPage(); });
+    await h.reset(page);
+  });
+
+  await rep.step('the brush reuses its canvases between strokes without ever showing stale pixels', async () => {
+    await h.reset(page);
+    const c = await h.center(page);
+    const drive = (kind, pts) => page.evaluate(async ([kind, pts, cx, cy]) => {
+      const el = document.querySelector('canvas.overlay');
+      const mk = (type, x, y) => new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 6, pointerType: 'pen', isPrimary: true, clientX: cx + x, clientY: cy + y, pressure: type === 'pointerup' ? 0 : 0.6, buttons: type === 'pointerup' ? 0 : 1, button: 0 });
+      const frame = () => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+      if (kind === 'down') { el.dispatchEvent(mk('pointerdown', pts[0][0], pts[0][1])); await frame(); for (const p of pts.slice(1)) { el.dispatchEvent(mk('pointermove', p[0], p[1])); await frame(); } }
+      else { const l = pts[pts.length - 1]; el.dispatchEvent(mk('pointerup', l[0], l[1])); await frame(); }
+    }, [kind, pts, c.x, c.y]);
+    const A = [[-200, -100], [-150, -90], [-100, -100], [-60, -95]], B = [[60, 90], [110, 100], [160, 90], [200, 95]];
+    await h.ev(page, (ed) => { ed.setFg('#cc0000'); ed.setBrushPreset('paint-hard-air'); ed.setBrush({ size: 30, hardness: 1, flow: 1, opacity: 1 }); });
+    await drive('down', A); await drive('up', A);               // stroke A: the layer, its preview and the buffer get created and kept
+    const a = await h.pixels(page); assert(a > 500, 'stroke A painted');
+    await h.cmd(page, 'select.all'); await h.cmd(page, 'edit.delete'); await h.cmd(page, 'select.none');
+    assert((await h.pixels(page)) === 0, 'the layer was cleared by another command in between');
+    await drive('down', B);                                      // stroke B starts on the same layer: nothing from A may come back
+    const screenAtA = await page.evaluate(([x, y]) => { const ed = window.__quarc.ed; const pm = ed.view.pageMatrix(ed.page), b = document.querySelector('.viewport').getBoundingClientRect(), cv = document.querySelector('.viewport canvas:not(.overlay)'); const wx = (b.width / 2 + x - pm.e) / pm.a, wy = (b.height / 2 + y - pm.f) / pm.d; const sx = Math.round(pm.a * wx + pm.e), sy = Math.round(pm.d * wy + pm.f); return Array.from(cv.getContext('2d').getImageData(Math.round(sx * cv.width / b.width), Math.round(sy * cv.height / b.height), 1, 1).data); }, [-150, -90]);
+    assert(near(screenAtA, 255, 255, 255, 6), `stroke A did not reappear while painting B (screen shows ${screenAtA})`);
+    await drive('up', B);
+    const b = await h.pixels(page);
+    assert(b > 500 && Math.abs(b - a) < a * 0.35, `only stroke B is in the layer afterwards (${b} px, A was ${a} px)`);
+    await h.cmd(page, 'edit.undo'); assert((await h.pixels(page)) === 0, 'undo removes B and leaves the layer as cleared');
+    for (let i = 0; i < 4 && (await h.pixels(page)) !== a; i++) await h.cmd(page, 'edit.undo'); // select / delete are steps of their own
+    assert((await h.pixels(page)) === a, 'undoing further restores exactly stroke A');
+    for (let i = 0; i < 6 && (await h.pixels(page)) !== b; i++) await h.cmd(page, 'edit.redo');
+    assert((await h.pixels(page)) === b, 'redoing brings stroke B back exactly (its after-pixels were captured at undo time)');
+    await h.reset(page);
+  });
 }

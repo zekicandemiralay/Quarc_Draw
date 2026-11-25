@@ -12,7 +12,7 @@ import { DocSnapshot, restoreDoc, snapshotDoc } from '../core/snapshot';
 import { Viewport, layoutPages } from '../core/viewport';
 import type { LayerOverlay } from '../core/render';
 import { Emitter, uid } from '../core/util';
-import { BrushSettings, DEFAULT_BRUSH } from '../brush/engine';
+import { BrushSettings, DEFAULT_BRUSH, releaseStrokeSpares } from '../brush/engine';
 import { BRUSH_PRESETS, getBrush } from '../brush/presets';
 import { Tool, ToolOptions, defaultToolOptions } from '../tools/tool';
 import { createTool } from '../tools/registry';
@@ -54,6 +54,8 @@ export class Editor {
   overlayHost: HTMLElement | null = null;
   /** set by the canvas view so tools can request redraw */
   renderHook: (() => void) | null = null;
+  /** repaint only `rect` (page-local coordinates) of the page — used while a brush stroke is in progress */
+  renderRectHook: ((page: Page, rect: Rect) => void) | null = null;
   overlayHook: (() => void) | null = null;
   /** transient message shown in the status bar */
   statusMessage = '';
@@ -65,7 +67,8 @@ export class Editor {
   syncId: string | null = null;
   lastSavedAt = 0;
   isNew = true;
-  presentation = false;
+  /** when the pointer last drew on the canvas (performance.now()) — autosave waits for a pause so it never lands mid-stroke */
+  lastInputAt = -1e9;
 
   constructor(doc: QDocument) {
     this.doc = doc;
@@ -83,6 +86,8 @@ export class Editor {
     if (topics.some((t) => t === 'doc' || t === 'layers' || t === 'selection' || t === 'objsel' || t === 'view' || t === 'page')) this.requestRender();
   }
   requestRender() { this.renderHook?.(); }
+  /** Cheap repaint of a small part of a page. Falls back to a full repaint when the view has no partial path. */
+  requestRenderRect(page: Page, rect: Rect) { if (this.renderRectHook) this.renderRectHook(page, rect); else this.renderHook?.(); }
   requestOverlay() { this.overlayHook?.(); }
   setStatus(msg: string, ms = 2500) {
     this.statusMessage = msg; this.changed('status');
@@ -212,13 +217,30 @@ export class Editor {
     this.changed('doc', 'layers', 'objsel', 'page', 'selection');
   }
   commitRasterPatch(label: string, pageId: string, layerId: string, target: 'layer' | 'mask', patch: StrokePatch) {
-    const apply = (img: ImageData) => () => {
-      const s = this.getSurface(pageId, layerId, target);
-      if (s) s.putPatch(patch.rect, img);
-      this.changed('layers');
-    };
+    const tiles = patch.tiles;
     this.doc.modified = Date.now();
-    this.history.push({ label, bytes: patch.before.data.length * 2, undo: apply(patch.before), redo: apply(patch.after) });
+    // memory this step holds: ImageData counts its bytes, a canvas atlas counts once however many tiles share it
+    const atlases = new Set<HTMLCanvasElement>();
+    let bytes = 0;
+    for (const t of tiles) { if (t.before instanceof ImageData) bytes += t.before.data.length * 2; else atlases.add(t.before.canvas); }
+    for (const a of atlases) bytes += a.width * a.height * 8;
+    this.history.push({
+      label, bytes,
+      undo: () => {
+        const s = this.getSurface(pageId, layerId, target);
+        if (s) {
+          // the layer still holds the "after" pixels right now: keep them for redo (done lazily, so a stroke costs no readback)
+          if (tiles.some((t) => !t.after)) { const snap = s.snapshotRects(tiles.map((t) => t.rect)); tiles.forEach((t, i) => { t.after ??= snap[i]; }); }
+          for (const t of tiles) s.putPixels(t.rect, t.before);
+        }
+        this.changed('layers');
+      },
+      redo: () => {
+        const s = this.getSurface(pageId, layerId, target);
+        if (s) for (const t of tiles) if (t.after) s.putPixels(t.rect, t.after);
+        this.changed('layers');
+      },
+    });
     this.changed('layers');
   }
   /** Convenience for pixel ops that mutate a surface: captures before/after of `rect` around `fn`. */
@@ -232,7 +254,7 @@ export class Editor {
     fn(s);
     s.touch();
     const after = s.getPatch(r);
-    this.commitRasterPatch(label, this.page.id, layerId, target, { rect: r, before, after });
+    this.commitRasterPatch(label, this.page.id, layerId, target, { tiles: [{ rect: r, before, after }] });
   }
 
   undo() { this.tool.cancel(); if (this.history.undo()) this.changed('doc', 'layers'); }
@@ -346,8 +368,6 @@ export class Editor {
     } else if (fit) this.view.fitRect(r, 48);
     this.changed('view');
   }
-  /** eraser tool id appropriate for the current workspace (pen-eraser-end switches to it) */
-  prefsWorkspaceEraser(): string { return prefs.get().workspace === 'studio' ? 'eraser' : 'ink-eraser'; }
   /** In continuous layouts, the page under the screen centre becomes the active page while scrolling. */
   syncActivePageToView() {
     if (this.doc.layout === 'single' || this.doc.pages.length < 2) return;
@@ -384,7 +404,7 @@ export class Editor {
   }
   markSaved() { this.history.markSaved(); this.lastSavedAt = Date.now(); this.isNew = false; this.changed('status'); }
   get dirty(): boolean { return this.history.isDirty; }
-  dispose() { this.tool.cancel(); this.overlays = []; this.renderHook = null; this.overlayHook = null; }
+  dispose() { this.tool.cancel(); releaseStrokeSpares(); this.overlays = []; this.renderHook = null; this.renderRectHook = null; this.overlayHook = null; }
 }
 
 /** React hook: re-render when any of the given topics change on the editor. */
@@ -403,16 +423,16 @@ export function useEditor<T>(ed: Editor | null, topics: Topic[], select: () => T
 }
 
 export function newDocument(opts: {
-  title?: string; width: number; height: number; dpi?: number; background?: string | null; kind?: QDocument['kind'];
-  pages?: number; template?: Page['background']['template']; withRasterLayer?: boolean; withVectorLayer?: boolean;
+  title?: string; width: number; height: number; dpi?: number; background?: string | null;
+  pages?: number; withRasterLayer?: boolean; withVectorLayer?: boolean;
 }): Editor {
-  const doc = createDocument(opts.title ?? 'Untitled', opts.kind ?? 'drawing');
+  const doc = createDocument(opts.title ?? 'Untitled');
   doc.dpi = opts.dpi ?? 96;
   const n = opts.pages ?? 1;
   for (let i = 0; i < n; i++) {
-    const p = createPage(opts.width, opts.height, `Page ${i + 1}`, { color: opts.background === undefined ? '#ffffff' : opts.background, template: opts.template ?? null });
+    const p = createPage(opts.width, opts.height, `Page ${i + 1}`, { color: opts.background === undefined ? '#ffffff' : opts.background });
     if (opts.withRasterLayer !== false) p.layers.push(createRasterLayer('Layer 1', opts.width, opts.height));
-    if (opts.withVectorLayer) p.layers.push(createVectorLayer('Ink'));
+    if (opts.withVectorLayer) p.layers.push(createVectorLayer('Vector'));
     doc.pages.push(p);
   }
   if (n > 1) doc.layout = 'vertical';

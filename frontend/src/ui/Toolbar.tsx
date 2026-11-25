@@ -1,19 +1,17 @@
-// Left tool strip with flyout groups; adapts to the active workspace.
+// Left tool strip with flyout groups.
 
 import { useEffect, useRef, useState } from 'react';
 import type { Editor } from '../editor/editor';
 import { useEditor } from '../editor/editor';
-import { TOOLBARS, toolMeta } from '../tools/catalog';
-import { prefs } from '../app/store';
+import { TOOLBAR, toolMeta } from '../tools/catalog';
 import { Icon } from './icons';
 import { Popover } from './common';
 import { ColorPicker } from './ColorPicker';
 import { formatKeys } from '../app/commands';
 
 export function Toolbar({ ed }: { ed: Editor }) {
-  const ws = prefs.useSelect((p) => p.workspace);
   const toolId = useEditor(ed, ['tool'], () => ed.toolId);
-  const slots = TOOLBARS[ws];
+  const slots = TOOLBAR;
   const [last, setLast] = useState<Record<string, string>>({});
   const [fly, setFly] = useState<{ idx: number; rect: DOMRect } | null>(null);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -22,7 +20,7 @@ export function Toolbar({ ed }: { ed: Editor }) {
   useEffect(() => {
     const s = slots.find((sl) => sl.includes(toolId));
     if (s) setLast((l) => (l[s.join()] === toolId ? l : { ...l, [s.join()]: toolId }));
-  }, [toolId, ws]);
+  }, [toolId]);
   const shown = (slot: string[]) => last[slot.join()] ?? slot[0];
 
   return (

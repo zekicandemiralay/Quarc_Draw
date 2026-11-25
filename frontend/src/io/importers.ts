@@ -9,7 +9,6 @@ import { blobToCanvas, createCanvas, ctx2d, uid } from '../core/util';
 import { parseDoc } from './qdraw';
 import { parseSvg } from './svg';
 import { ORA_TO_BLEND, PSD_TO_BLEND } from './exporters';
-import { importPdf, ensurePdfSource } from '../pdf/pdfIO';
 import { registerAssetBlob } from '../core/assets';
 import { toast } from '../app/bus';
 
@@ -17,7 +16,7 @@ export const MAX_DIM = 8192;
 
 const ext = (n: string) => (n.split('.').pop() ?? '').toLowerCase();
 export const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'avif', 'ico', 'jfif', 'tif', 'tiff'];
-export const OPEN_ACCEPT = '.qdraw,.psd,.ora,.pdf,.svg,.png,.jpg,.jpeg,.webp,.gif,.bmp,.avif,.ico';
+export const OPEN_ACCEPT = '.qdraw,.psd,.ora,.svg,.png,.jpg,.jpeg,.webp,.gif,.bmp,.avif,.ico';
 
 function fitCanvas(c: HTMLCanvasElement): HTMLCanvasElement {
   const m = Math.max(c.width, c.height);
@@ -30,7 +29,7 @@ function fitCanvas(c: HTMLCanvasElement): HTMLCanvasElement {
 
 export async function imageToEditor(blob: Blob, name: string): Promise<Editor> {
   const c = fitCanvas(await blobToCanvas(blob));
-  const doc = createDocument(name.replace(/\.[^.]+$/, ''), 'drawing');
+  const doc = createDocument(name.replace(/\.[^.]+$/, ''));
   const pg = createPage(c.width, c.height, 'Page 1', { color: null });
   const layer = createRasterLayer(name.replace(/\.[^.]+$/, '') || 'Image', c.width, c.height);
   layer.surface.setFromCanvas(c);
@@ -44,7 +43,7 @@ export async function imageToEditor(blob: Blob, name: string): Promise<Editor> {
 
 export async function svgToEditor(text: string, name: string): Promise<Editor> {
   const r = parseSvg(text);
-  const doc = createDocument(name.replace(/\.[^.]+$/, ''), 'drawing');
+  const doc = createDocument(name.replace(/\.[^.]+$/, ''));
   const w = Math.max(1, Math.round(r.width)), h = Math.max(1, Math.round(r.height));
   const pg = createPage(w, h, 'Page 1', { color: null });
   const vl = createVectorLayer('Vector');
@@ -63,7 +62,7 @@ export async function oraToEditor(blob: Blob, name: string): Promise<Editor> {
   const dom = new DOMParser().parseFromString(xml, 'application/xml');
   const img = dom.documentElement;
   const W = parseInt(img.getAttribute('w') ?? '0'), H = parseInt(img.getAttribute('h') ?? '0');
-  const doc = createDocument(name.replace(/\.[^.]+$/, ''), 'drawing');
+  const doc = createDocument(name.replace(/\.[^.]+$/, ''));
   const pg = createPage(W, H, 'Page 1', { color: null });
   const build = async (stack: Element): Promise<Layer[]> => {
     const out: Layer[] = [];
@@ -95,7 +94,7 @@ export async function psdToEditor(buf: ArrayBuffer, name: string): Promise<Edito
   const { readPsd } = await import('ag-psd');
   const psd = readPsd(buf, { skipThumbnail: true, skipLayerImageData: false, useImageData: false } as any);
   const W = psd.width, H = psd.height;
-  const doc = createDocument(name.replace(/\.[^.]+$/, ''), 'drawing');
+  const doc = createDocument(name.replace(/\.[^.]+$/, ''));
   const pg = createPage(W, H, 'Page 1', { color: null });
   const conv = (kids: any[] | undefined): Layer[] => {
     const out: Layer[] = [];
@@ -118,20 +117,19 @@ export async function psdToEditor(buf: ArrayBuffer, name: string): Promise<Edito
 // ------------------------------------------------------------ router
 export interface OpenResult { editor: Editor; message?: string }
 
-export async function openFile(file: File | { name: string; blob: Blob }, onProgress?: (d: number, t: number) => void): Promise<Editor> {
+export async function openFile(file: File | { name: string; blob: Blob }): Promise<Editor> {
   const name = file.name;
   const blob: Blob = 'blob' in file ? file.blob : file;
   const e = ext(name);
-  if (e === 'qdraw') { const doc = await parseDoc(blob); await ensurePdfSource(doc); const ed = new Editor(doc); ed.isNew = false; ed.fitPage(); return ed; }
+  if (e === 'qdraw') { const doc = await parseDoc(blob); const ed = new Editor(doc); ed.isNew = false; ed.fitPage(); return ed; }
   if (e === 'ora') return oraToEditor(blob, name);
   if (e === 'psd') return psdToEditor(await blob.arrayBuffer(), name);
-  if (e === 'pdf') return importPdf(new Uint8Array(await blob.arrayBuffer()), name, onProgress);
   if (e === 'svg') return svgToEditor(await blob.text(), name);
   if (IMAGE_EXT.includes(e) || blob.type.startsWith('image/')) return imageToEditor(blob, name);
   throw new Error(`Unsupported file type “.${e}”`);
 }
 
-export const isDocFile = (name: string) => ['qdraw', 'ora', 'psd', 'pdf', 'svg', ...IMAGE_EXT].includes(ext(name));
+export const isDocFile = (name: string) => ['qdraw', 'ora', 'psd', 'svg', ...IMAGE_EXT].includes(ext(name));
 
 /** register a font file with the browser so text tools can use it */
 export async function loadFontFile(file: File): Promise<string> {

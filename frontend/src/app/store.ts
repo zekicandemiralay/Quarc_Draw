@@ -27,11 +27,9 @@ export class Store<T extends object> {
 
 // ------------ Preferences ------------
 export type ThemeName = 'dark' | 'light' | 'midnight';
-export type Workspace = 'studio' | 'notes' | 'reader';
 
 export interface Prefs {
   theme: ThemeName;
-  workspace: Workspace;
   penOnly: boolean;         // only pen input draws; touch pans/zooms (like Procreate/GoodNotes "apple pencil only")
   palmRejection: boolean;
   pressureGamma: number;    // pen pressure response curve
@@ -50,14 +48,15 @@ export interface Prefs {
   openPanels: string[];
   authorName: string;
   tutorialSeen: boolean;
-  signatures: string[]; // PNG data urls
+  /** hide the painting on the home screen */
+  hideHero: boolean;
   fonts: string[];      // user-loaded font family names
   canvasBg: string;
   language: string;
 }
 export const prefs = new Store<Prefs>('quarcdraw.prefs.v1', {
-  theme: 'dark', workspace: 'studio', penOnly: false, palmRejection: true, pressureGamma: 1, autosave: true,
+  theme: 'dark', penOnly: false, palmRejection: true, pressureGamma: 1, autosave: true,
   showRulers: true, showStatusBar: true, checker: true, recentColors: [], swatches: [], userGradients: [], userBrushes: [],
   customShortcuts: {}, panelWidth: 300, leftSidebar: true, rightDock: true, openPanels: ['color', 'layers'],
-  authorName: '', tutorialSeen: false, signatures: [], fonts: [], canvasBg: '', language: 'en',
+  authorName: '', tutorialSeen: false, hideHero: false, fonts: [], canvasBg: '', language: 'en',
 });

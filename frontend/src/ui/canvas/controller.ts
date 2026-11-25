@@ -34,6 +34,17 @@ export class CanvasController {
   }
   detach() { for (const [t, f] of this.onAll) this.el.removeEventListener(t, f); this.onAll = []; }
 
+  /**
+   * The status bar shows the pointer position. Re-rendering it (React, then style + layout of the page) costs more than the
+   * drawing itself — it was the single biggest cost of a stroke on a slow device — so it is refreshed a few times a second
+   * while hovering and not at all while a stroke is in progress (it catches up when the pen lifts).
+   */
+  private statusTimer = 0;
+  private statusSoon() {
+    if (this.statusTimer) return;
+    this.statusTimer = window.setTimeout(() => { this.statusTimer = 0; this.ed.changed('status'); }, 120);
+  }
+
   private rect() { return this.el.getBoundingClientRect(); }
   private screenOf(e: PointerEvent | WheelEvent): Vec { const r = this.rect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
 
@@ -57,7 +68,7 @@ export class CanvasController {
   private toolFor(e: PointerEvent): { tool: Tool; temp: boolean } {
     const ed = this.ed;
     const eraserEnd = e.pointerType === 'pen' && (e.buttons & 32) !== 0;
-    if (eraserEnd) return { tool: ed.getTool(ed.prefsWorkspaceEraser()), temp: true };
+    if (eraserEnd) return { tool: ed.getTool('eraser'), temp: true };
     if (e.altKey && BRUSH_FAMILY.has(ed.toolId) && e.pointerType === 'mouse') return { tool: ed.getTool('eyedropper'), temp: true };
     return { tool: ed.tool, temp: false };
   }
@@ -68,6 +79,7 @@ export class CanvasController {
     e.preventDefault();
     try { this.el.setPointerCapture(e.pointerId); } catch { /* synthetic / unknown pointer id */ }
     const now = performance.now();
+    ed.lastInputAt = now;
     if (e.pointerType === 'pen') this.lastPen = now;
     const p = prefs.get();
     if (e.pointerType === 'touch' && p.palmRejection && now - this.lastPen < 700) return;
@@ -116,8 +128,9 @@ export class CanvasController {
       const events = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [];
       const list = events.length ? events : [e];
       for (const ev of list) a.tool.pointerMove(this.build(ev, a.page, undefined, 0));
+      a.tool.moveEnd();
+      ed.lastInputAt = performance.now();
       ed.pointerLocal = a.page ? ed.view.worldToLocal(a.page, ed.view.toWorld(this.screenOf(e))) : null;
-      ed.changed('status');
       return;
     }
     // hover
@@ -125,7 +138,7 @@ export class CanvasController {
     const page = this.pickPage(e);
     const tp = this.build(e, page);
     ed.pointerLocal = page ? tp.local : null;
-    ed.changed('status');
+    this.statusSoon();
     const tool = ed.spaceDown ? ed.getTool('hand') : ed.tool;
     tool.hover(tp);
     this.el.style.cursor = tool.cursor;
@@ -154,6 +167,7 @@ export class CanvasController {
     if (cancelled) { a.tool.cancel(); return; }
     a.tool.pointerUp(this.build(e, a.page, undefined, this.lastClick.n));
     ed.requestOverlay();
+    this.statusSoon();
     void rec;
   }
 
@@ -177,10 +191,7 @@ export class CanvasController {
     g.moved += Math.abs(cx - g.cx) + Math.abs(cy - g.cy) + Math.abs(dist - g.dist);
     v.panBy(cx - g.cx, cy - g.cy);
     v.zoomAt({ x: cx, y: cy }, v.zoom * (dist / g.dist));
-    if (prefs.get().workspace === 'studio') {
-      let da = angle - g.angle;
-      v.rotateAt({ x: cx, y: cy }, v.rotation + da);
-    }
+    v.rotateAt({ x: cx, y: cy }, v.rotation + (angle - g.angle));
     g.dist = dist; g.angle = angle; g.cx = cx; g.cy = cy;
     this.ed.syncActivePageToView();
     this.ed.changed('view');
@@ -191,8 +202,7 @@ export class CanvasController {
     e.preventDefault();
     const ed = this.ed, v = ed.view, s = this.screenOf(e);
     const mouseWheel = e.deltaMode === 1 || (Number.isInteger(e.deltaY) && Math.abs(e.deltaY) >= 100 && e.deltaX === 0);
-    const studio = prefs.get().workspace === 'studio';
-    if (e.ctrlKey || (studio && mouseWheel && !e.shiftKey)) {
+    if (e.ctrlKey || (mouseWheel && !e.shiftKey)) {
       const k = Math.exp(-e.deltaY * (e.ctrlKey && !mouseWheel ? 0.01 : 0.0016) * (e.deltaMode === 1 ? 16 : 1));
       v.zoomAt(s, v.zoom * k);
     } else {

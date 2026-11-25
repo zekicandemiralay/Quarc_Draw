@@ -10,8 +10,9 @@ import { PopButton, MenuList } from './common';
 import { openDialog, toast, confirmThen } from '../app/bus';
 import { downloadBlob, formatBytes, sanitizeFilename, timeAgo, uid } from '../core/util';
 import { syncEngine } from '../sync/engine';
+import { prefs } from '../app/store';
 
-type Filter = { kind: 'all' } | { kind: 'recent' } | { kind: 'star' } | { kind: 'type'; type: LibraryMeta['kind'] } | { kind: 'folder'; name: string } | { kind: 'tag'; tag: string } | { kind: 'trash' };
+type Filter = { kind: 'all' } | { kind: 'recent' } | { kind: 'star' } | { kind: 'folder'; name: string } | { kind: 'tag'; tag: string } | { kind: 'trash' };
 
 /** change library-level properties (title, folder, tags, star) – rewrites the stored document so sync stays consistent */
 export async function updateDocProps(id: string, patch: Partial<Pick<LibraryMeta, 'title' | 'folder' | 'tags' | 'starred'>>) {
@@ -37,14 +38,29 @@ export async function duplicateDoc(id: string) {
   const doc = await parseDoc(blob);
   doc.id = uid('doc'); doc.title += ' copy'; doc.created = Date.now();
   const nb = await serializeDoc(doc); const m = await peekMeta(nb);
-  await putRecord({ id: doc.id, title: doc.title, kind: doc.kind, created: doc.created, modified: Date.now(), pages: m.pages, bytes: nb.size, thumb: m.thumb, folder: doc.folder, tags: doc.tags, starred: false, trashed: 0, syncDirty: true }, nb);
+  await putRecord({ id: doc.id, title: doc.title, created: doc.created, modified: Date.now(), pages: m.pages, bytes: nb.size, thumb: m.thumb, folder: doc.folder, tags: doc.tags, starred: false, trashed: 0, syncDirty: true }, nb);
   toast('Duplicated', 'success');
+}
+
+/** The opening picture: an oil painting made in Quarc Draw itself (see scripts/paint-artwork.mjs). Shown on the home screen only. */
+export const HERO_SRC = '/art/harbour-at-dusk.webp';
+function Hero() {
+  const [ok, setOk] = useState(true);
+  if (!ok) return null;
+  return (
+    <div className="hero">
+      <img src={HERO_SRC} alt="" draggable={false} onError={() => setOk(false)} />
+      <div className="txt"><h1>Quarc <b>Draw</b></h1><p>Layers, oil brushes and vector shapes — draw anywhere, in sync everywhere.</p></div>
+      <div className="credit">“Harbour at Dusk” — oil, painted in Quarc Draw</div>
+      <button className="btn ghost icon sm x" title="Hide this picture (Preferences brings it back)" onClick={() => prefs.set({ hideHero: true })}><Icon name="close" size={14} /></button>
+    </div>
+  );
 }
 
 function Cover({ m }: { m: LibraryMeta }) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => { if (!m.thumb) return; const u = URL.createObjectURL(m.thumb); setUrl(u); return () => URL.revokeObjectURL(u); }, [m.thumb, m.modified]);
-  return <div className="cover">{url ? <img src={url} alt="" /> : <Icon name={m.kind === 'pdf' ? 'file' : m.kind === 'notebook' ? 'page' : 'palette'} size={44} style={{ opacity: 0.3 }} />}<span className="kind badge">{m.kind}</span></div>;
+  return <div className="cover">{url ? <img src={url} alt="" /> : <Icon name="palette" size={44} style={{ opacity: 0.3 }} />}</div>;
 }
 
 export function Library({ onClose }: { onClose: () => void }) {
@@ -53,6 +69,7 @@ export function Library({ onClose }: { onClose: () => void }) {
   const [filter, setFilter] = useState<Filter>({ kind: 'all' });
   const [q, setQ] = useState('');
   const [sort, setSort] = useState<'modified' | 'title' | 'created' | 'size'>('modified');
+  const hideHero = prefs.useSelect((p) => p.hideHero);
   const reload = async () => { setItems(await listLibrary()); setFolderList(await getFolders()); };
   useEffect(() => { void reload(); return libraryEvents.on('change', () => void reload()); }, []);
 
@@ -61,7 +78,6 @@ export function Library({ onClose }: { onClose: () => void }) {
     let l = items.filter((i) => (filter.kind === 'trash' ? i.trashed : !i.trashed));
     switch (filter.kind) {
       case 'star': l = l.filter((i) => i.starred); break;
-      case 'type': l = l.filter((i) => i.kind === filter.type); break;
       case 'folder': l = l.filter((i) => i.folder === filter.name); break;
       case 'tag': l = l.filter((i) => i.tags.includes(filter.tag)); break;
       case 'recent': l = l.slice(0, 12); break;
@@ -100,11 +116,6 @@ export function Library({ onClose }: { onClose: () => void }) {
         <Side f={{ kind: 'all' }} icon="library" label="All documents" count={live.length} />
         <Side f={{ kind: 'recent' }} icon="history" label="Recent" />
         <Side f={{ kind: 'star' }} icon="star2" label="Favourites" count={live.filter((i) => i.starred).length} />
-        <h4>Type</h4>
-        <Side f={{ kind: 'type', type: 'drawing' }} icon="palette" label="Drawings" />
-        <Side f={{ kind: 'type', type: 'notebook' }} icon="page" label="Notebooks" />
-        <Side f={{ kind: 'type', type: 'pdf' }} icon="file" label="PDFs" />
-        <Side f={{ kind: 'type', type: 'whiteboard' }} icon="present" label="Whiteboards" />
         <h4>Folders <button className="btn ghost icon sm" style={{ float: 'right', marginTop: -4 }} title="New folder" onClick={() => openDialog('prompt', { title: 'New folder', fields: [{ key: 'name', label: 'Name', type: 'text', value: '' }], ok: (v: any) => v.name.trim() && setFolders([...new Set([...folders, v.name.trim()])]) })}><Icon name="plus" size={13} /></button></h4>
         {folders.map((f) => <Side key={f} f={{ kind: 'folder', name: f }} icon="folder" label={f} count={live.filter((i) => i.folder === f).length} />)}
         {tags.length > 0 && <h4>Tags</h4>}
@@ -114,7 +125,7 @@ export function Library({ onClose }: { onClose: () => void }) {
       </div>
       <div className="lib-main">
         <div className="lib-top">
-          <h2>{filter.kind === 'all' ? 'All documents' : filter.kind === 'recent' ? 'Recent' : filter.kind === 'star' ? 'Favourites' : filter.kind === 'trash' ? 'Trash' : filter.kind === 'type' ? filter.type[0].toUpperCase() + filter.type.slice(1) + 's' : filter.kind === 'folder' ? filter.name : `#${filter.tag}`}</h2>
+          <h2>{filter.kind === 'all' ? 'All documents' : filter.kind === 'recent' ? 'Recent' : filter.kind === 'star' ? 'Favourites' : filter.kind === 'trash' ? 'Trash' : filter.kind === 'folder' ? filter.name : `#${filter.tag}`}</h2>
           <div className="spacer" />
           <div style={{ position: 'relative' }}><input className="input" style={{ paddingLeft: 28, width: 220 }} placeholder="Search documents…" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.stopPropagation()} /><span style={{ position: 'absolute', left: 8, top: 7, color: 'var(--text-faint)' }}><Icon name="search" size={14} /></span></div>
           <select className="select" value={sort} onChange={(e) => setSort(e.target.value as any)}><option value="modified">Last modified</option><option value="created">Created</option><option value="title">Name</option><option value="size">Size</option></select>
@@ -123,6 +134,7 @@ export function Library({ onClose }: { onClose: () => void }) {
           <button className="btn primary" onClick={() => openDialog('new')}><Icon name="plus" size={15} />New</button>
           {workspace.editors.length > 0 && <button className="btn ghost icon" title="Back to canvas" onClick={onClose}><Icon name="close" size={16} /></button>}
         </div>
+        {filter.kind === 'all' && !q.trim() && !hideHero && <Hero />}
         <div className="lib-grid">
           {filter.kind !== 'trash' && <div className="new-tile" onClick={() => openDialog('new')}><div className="col" style={{ alignItems: 'center', gap: 6 }}><Icon name="file-plus" size={34} />Create new</div></div>}
           {shown.map((m) => (

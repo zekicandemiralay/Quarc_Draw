@@ -18,7 +18,7 @@ async function encodeSurface(s: RasterSurface): Promise<Uint8Array | null> {
   if (hit && hit.version === s.version) return hit.data;
   const c = s.peek();
   let data: Uint8Array | null = null;
-  if (c && s.contentBounds() !== null) data = new Uint8Array(await (await canvasToBlob(c, 'image/png')).arrayBuffer());
+  if (c && s.hasContent()) data = new Uint8Array(await (await canvasToBlob(c, 'image/png')).arrayBuffer());
   pngCache.set(s, { version: s.version, data });
   return data;
 }
@@ -54,7 +54,7 @@ export async function serializeDoc(doc: QDocument, opts: { thumbnail?: boolean }
   const assets: any[] = [];
   for (const a of doc.assets.values()) {
     const path = `assets/${a.id}`;
-    zip.file(path, a.blob, { compression: a.kind === 'pdf' ? 'DEFLATE' : 'STORE' });
+    zip.file(path, a.blob, { compression: 'STORE' });
     assets.push({ id: a.id, name: a.name, mime: a.mime, kind: a.kind, path });
   }
   const { pages: _p, assets: _a, ...docRest } = doc as any;
@@ -70,9 +70,16 @@ export async function serializeDoc(doc: QDocument, opts: { thumbnail?: boolean }
   return zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 3 }, mimeType: QDRAW_MIME });
 }
 
+/** Quarc Draw 1.0.0 could also store notebook ink, sticky notes and PDF markup; those are not drawing objects, so they are left out. */
+const OBJECT_TYPES = new Set(['path', 'rect', 'ellipse', 'polygon', 'line', 'text', 'image', 'group']);
+function keepKnownObjects(objs: any[]): any[] {
+  return objs.filter((o) => OBJECT_TYPES.has(o?.type)).map((o) => (o.type === 'group' ? { ...o, children: keepKnownObjects(o.children ?? []) } : o));
+}
+
 async function layerFromJSON(j: LayerJSON, zip: JSZip): Promise<Layer> {
   const { png, size, mask, children, ...rest } = j;
   const l: any = { ...rest, mask: null };
+  if (j.type === 'vector') l.objects = keepKnownObjects(l.objects ?? []);
   if (j.type === 'raster') {
     const s = new RasterSurface(size?.[0] ?? 1, size?.[1] ?? 1);
     if (png) { const f = zip.file(png); if (f) s.setFromCanvas(await blobToCanvas(new Blob([await f.async('arraybuffer')], { type: 'image/png' }))); }
@@ -93,8 +100,9 @@ export async function parseDoc(input: Blob | ArrayBuffer | Uint8Array): Promise<
   const mf = zip.file('manifest.json');
   if (!mf) throw new Error('Not a Quarc Draw file (manifest.json missing)');
   const m = JSON.parse(await mf.async('string'));
-  const doc = createDocument(m.doc.title, m.doc.kind);
+  const doc = createDocument(m.doc.title);
   Object.assign(doc, m.doc);
+  for (const k of ['kind', 'pdfAssetId', 'outline']) delete (doc as any)[k]; // notebook / PDF fields of Quarc Draw 1.0.0
   doc.assets = new Map();
   for (const a of m.assets ?? []) {
     const f = zip.file(a.path);
@@ -108,21 +116,23 @@ export async function parseDoc(input: Blob | ArrayBuffer | Uint8Array): Promise<
   for (const pj of m.pages) {
     const { layers, ...pr } = pj;
     const page: Page = { ...pr, layers: [] };
+    for (const k of ['infinite', 'bookmark', 'label']) delete (page as any)[k];
+    if (page.background) { const { template: _t, pdfPage: _p, ...bg } = page.background as any; page.background = bg; }
     page.layers = await Promise.all((layers ?? []).map((l: LayerJSON) => layerFromJSON(l, zip)));
     doc.pages.push(page);
   }
   return doc;
 }
 
-/** Read document metadata (title, kind, page count, thumbnail) without decoding any layer pixels. */
-export async function peekMeta(blob: Blob): Promise<{ id: string; title: string; kind: QDocument['kind']; created: number; modified: number; pages: number; folder: string | null; tags: string[]; starred: boolean; thumb: Blob | null }> {
+/** Read document metadata (title, page count, thumbnail) without decoding any layer pixels. */
+export async function peekMeta(blob: Blob): Promise<{ id: string; title: string; created: number; modified: number; pages: number; folder: string | null; tags: string[]; starred: boolean; thumb: Blob | null }> {
   const zip = await JSZip.loadAsync(blob);
   const mf = zip.file('manifest.json');
   if (!mf) throw new Error('Not a Quarc Draw file');
   const m = JSON.parse(await mf.async('string'));
   const th = zip.file('thumbnail.png');
   return {
-    id: m.doc.id, title: m.doc.title, kind: m.doc.kind, created: m.doc.created, modified: m.doc.modified, pages: m.pages?.length ?? 1,
+    id: m.doc.id, title: m.doc.title, created: m.doc.created, modified: m.doc.modified, pages: m.pages?.length ?? 1,
     folder: m.doc.folder ?? null, tags: m.doc.tags ?? [], starred: !!m.doc.starred,
     thumb: th ? new Blob([await th.async('arraybuffer')], { type: 'image/png' }) : null,
   };

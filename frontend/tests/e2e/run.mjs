@@ -1,5 +1,5 @@
 // End-to-end suite: drives the production build in a real browser (Edge/Chrome).
-//   node tests/e2e/run.mjs [studio|notes|reader|io|sync ...]
+//   node tests/e2e/run.mjs [studio|io|sync|render|ui ...]
 import { startServer, launch, Reporter, shot as shotRaw, newPage } from './lib.mjs';
 
 const only = process.argv.slice(2);
@@ -54,8 +54,6 @@ async function group(name, mod) {
 }
 
 await group('studio', 'studio');
-await group('notes', 'notes');
-await group('reader', 'reader');
 await group('io', 'io');
 await group('sync', 'sync');
 await group('render', 'render');

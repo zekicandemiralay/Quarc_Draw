@@ -51,19 +51,18 @@ export function buildMenus(): Record<string, MenuEntry[]> {
       c('object.flipH'), c('object.flipV'), c('object.topath'), sep, c('object.lock'), c('object.hide'),
     ],
     Page: [
-      c('page.add'), c('page.duplicate'), c('page.delete'), sep, c('page.prev'), c('page.next'), c('page.goto'), c('page.bookmark'), sep,
+      c('page.add'), c('page.duplicate'), c('page.delete'), sep, c('page.prev'), c('page.next'), c('page.goto'), sep,
       sub('Layout', ['single', 'vertical', 'horizontal', 'spread', 'grid', 'free'].map((m) => c(`view.layout.${m}`))), c('page.setup'),
     ],
     View: [
       c('view.zoomin'), c('view.zoomout'), c('view.fit'), c('view.fitwidth'), c('view.fitall'), c('view.100'), c('view.200'), sep,
       c('view.rotate90'), c('view.rotatereset'), c('view.flip'), sep,
       c('view.rulers'), c('view.grid'), c('view.snapgrid'), c('view.gridsettings'), c('view.snapguides'), c('view.clearguides'), sep,
-      c('view.symmetry'), c('view.symmetry.settings'), c('view.perspective'), c('view.perspective.settings'), c('view.checker'), sep, c('view.present'), c('view.focus'), c('view.fullscreen'),
+      c('view.symmetry'), c('view.symmetry.settings'), c('view.perspective'), c('view.perspective.settings'), c('view.checker'), sep, c('view.focus'), c('view.fullscreen'),
     ],
     Window: [
-      c('ws.studio'), c('ws.notes'), c('ws.reader'), sep,
       sub('Theme', [c('theme.dark'), c('theme.midnight'), c('theme.light')]), c('penonly'), sep,
-      c('panel.layers'), c('panel.color'), c('panel.brushes'), c('panel.history'), c('panel.navigator'), c('panel.pages'), c('panel.search'), c('panel.assets'),
+      c('panel.layers'), c('panel.color'), c('panel.brushes'), c('panel.history'), c('panel.navigator'), c('panel.pages'), c('panel.assets'),
     ],
     Help: [c('help.shortcuts'), c('help.tutorial'), sep, c('help.about')],
   };

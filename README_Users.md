@@ -1,7 +1,7 @@
 # Quarc Draw — User Guide
 
-Draw and paint with layers and brushes, sketch vector shapes, write in notebooks with a pen, and mark up PDFs — and, if you
-want, keep every drawing in step across your devices.
+Draw and paint with layers and brushes, sketch vector shapes and text — and, if you want, keep every drawing in step across
+your devices.
 
 ## Getting started
 
@@ -31,7 +31,7 @@ WebDAV or Dropbox instead.
 - **Windows / macOS / Linux:** *File ▸ Export* opens the system's "Save as" dialog.
 - **Android:** exported files open the share sheet — choose **Save to Files**, Drive, mail…
 - **Browser:** an ordinary download.
-- Your own drawings are `.qdraw` files; PNG, JPEG, WebP, SVG, PDF, PSD and OpenRaster work too.
+- Your own drawings are `.qdraw` files; PNG, JPEG, WebP, SVG, PDF (for printing), PSD and OpenRaster work too.
 
 ## Good to know
 

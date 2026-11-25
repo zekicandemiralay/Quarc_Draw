@@ -9,7 +9,7 @@ import { mApply, mRotation, mDet, rectRound, rectUnion, rectIntersect, rad, clam
 import type { BlendMode } from '../core/model';
 import { blendToComposite } from '../core/model';
 import { acquire, release } from '../core/canvaspool';
-import type { RasterSurface } from '../core/raster';
+import type { RasterSurface, PatchPixels } from '../core/raster';
 import { createCanvas, ctx2d, rng } from '../core/util';
 import { gaussianBlur, sharpen3 } from '../filters/pixels';
 import { parseColor, rgbaToCss, mix, type RGBA } from '../core/color';
@@ -73,7 +73,7 @@ function makeTip(kind: TipKind, hardness: number, color: string, res: number, im
       const stop = (t: number, a: number) => g.addColorStop(clamp(t, 0, 1), rgbaToCss({ ...col, a: col.a * a }));
       stop(0, 1); stop(inner, 1);
       // smooth falloff (gaussian-ish) between inner radius and edge
-      const n = 8;
+      const n = 28; // fine steps: with few, overlapping soft dabs add up their kinks at the same radii and show as rings
       for (let i = 1; i <= n; i++) { const t = i / n; const a = (1 - t) ** 2 * (1 + 2 * t); stop(inner + (1 - inner) * t, a); }
       ctx.fillStyle = g; ctx.fillRect(0, 0, res, res);
     }
@@ -173,7 +173,21 @@ export const DEFAULT_BRUSH: BrushSettings = {
   grain: 'paper', grainDepth: 0.35, grainScale: 1, blend: 'normal', strength: 0.6, wet: 0, range: 'midtones',
 };
 
-export interface StrokePatch { rect: Rect; before: ImageData; after: ImageData }
+/** One rectangle of an undo step. `after` may be missing: the editor captures it the first time the step is undone. */
+export interface PatchTile { rect: Rect; before: ImageData | PatchPixels; after?: ImageData | PatchPixels }
+export interface StrokePatch { tiles: PatchTile[] }
+
+// ---------- the two page-sized canvases every stroke needs, kept for the next stroke ----------
+// Starting a stroke used to mean: clear and fill two canvases the size of the page (tens of MB each). After a stroke is
+// committed its preview is identical to the layer, and the stroke buffer is easy to wipe where it was used — so both are
+// kept, and the next stroke on the same layer starts instantly (the preview is only trusted while the layer's version is unchanged).
+let spare: { surface: RasterSurface; version: number; preview: HTMLCanvasElement } | null = null;
+let spareBuf: HTMLCanvasElement | null = null;
+/** let go of the kept canvases (memory pressure, document closed) */
+export function releaseStrokeSpares() { if (spare) release(spare.preview); if (spareBuf) release(spareBuf); spare = null; spareBuf = null; }
+
+/** side of the squares a stroke's undo patch is made of */
+const PATCH_TILE = 64;
 
 export class BrushStroke {
   readonly s: BrushSettings;
@@ -188,6 +202,8 @@ export class BrushStroke {
   private color: string;
   private rand: () => number;
   private dirty: Rect | null = null;
+  /** tiles (PATCH_TILE squares, row-major index) the stroke has changed — the undo patch covers only these, not the whole bounding box */
+  private touched = new Set<number>();
   private pending: Rect | null = null;
   private lastPt: InputPoint | null = null;
   private smooth: InputPoint | null = null;
@@ -202,7 +218,10 @@ export class BrushStroke {
   private erase: boolean;
   private wetColor: RGBA;
   private released = false;
+  private keepPreview = false;
   private beforeCanvas: HTMLCanvasElement | null = null;
+  /** scratch space for compositing one flushed region; grows when needed and lives as long as the stroke */
+  private scratch: HTMLCanvasElement | null = null;
 
   constructor(o: StrokeOptions) {
     this.o = o; this.s = o.settings;
@@ -214,11 +233,19 @@ export class BrushStroke {
     this.rand = rng(o.seed ?? (Math.random() * 1e9) | 0);
     this.erase = o.eraseOverride ?? this.s.mode === 'erase';
     this.direct = ['smudge', 'blur', 'sharpen', 'dodge', 'burn', 'clone'].includes(this.s.mode);
-    this.preview = acquire(this.w, this.h);
-    this.pctx = this.preview.getContext('2d', { willReadFrequently: this.direct })!;
-    this.pctx.drawImage(this.base, 0, 0);
+    const kept = spare;
+    if (kept && !this.direct && kept.surface === o.surface && kept.version === o.surface.version && kept.preview.width === this.w && kept.preview.height === this.h) {
+      this.preview = kept.preview; spare = null; // still the same pixels as the layer: nothing to copy
+      this.pctx = this.preview.getContext('2d')!;
+    } else {
+      if (kept) { release(kept.preview); spare = null; }
+      this.preview = acquire(this.w, this.h);
+      this.pctx = this.preview.getContext('2d', { willReadFrequently: this.direct })!;
+      this.pctx.drawImage(this.base, 0, 0);
+    }
     if (!this.direct) {
-      this.buf = acquire(this.w, this.h);
+      if (spareBuf && spareBuf.width === this.w && spareBuf.height === this.h) { this.buf = spareBuf; spareBuf = null; }
+      else { if (spareBuf) release(spareBuf); spareBuf = null; this.buf = acquire(this.w, this.h); }
       this.bctx = this.buf.getContext('2d')!;
     } else {
       // keep an immutable copy of the original for selection restore
@@ -485,16 +512,23 @@ export class BrushStroke {
 
   /** Re-composite the pending region into `preview`. Returns the updated rect (page coords) or null. */
   flush(): Rect | null {
-    if (!this.pending || this.direct) { const had = this.pending; this.pending = null; return had; }
+    if (!this.pending || this.direct) { const had = this.pending; this.pending = null; if (had) this.markTouched(had); return had; }
     const R0 = rectIntersect(rectRound(this.pending), { x: 0, y: 0, w: this.w, h: this.h });
     this.pending = null;
     if (!R0) return null;
+    this.markTouched(R0);
     const R = R0, s = this.s;
     // restore base in region
     this.pctx.clearRect(R.x, R.y, R.w, R.h);
     this.pctx.drawImage(this.base, R.x, R.y, R.w, R.h, R.x, R.y, R.w, R.h);
-    const tmp = acquire(R.w, R.h);
-    const tctx = tmp.getContext('2d')!;
+    if (!this.scratch || this.scratch.width < R.w || this.scratch.height < R.h) {
+      const w = Math.max(R.w, this.scratch?.width ?? 0), h = Math.max(R.h, this.scratch?.height ?? 0);
+      if (this.scratch) this.scratch.width = this.scratch.height = 1; // free the old one at once
+      this.scratch = createCanvas(Math.ceil(w / 128) * 128, Math.ceil(h / 128) * 128);
+    }
+    const tmp = this.scratch;
+    const tctx = ctx2d(tmp);
+    tctx.clearRect(0, 0, R.w, R.h);
     tctx.drawImage(this.buf!, R.x, R.y, R.w, R.h, 0, 0, R.w, R.h);
     // grain
     const gt = s.grain !== 'none' ? grainTile(s.grain, s.grainDepth) : null;
@@ -510,33 +544,76 @@ export class BrushStroke {
     this.pctx.save();
     this.pctx.globalAlpha = s.opacity;
     this.pctx.globalCompositeOperation = this.erase ? 'destination-out' : blendToComposite(s.blend);
-    this.pctx.drawImage(tmp, R.x, R.y);
+    this.pctx.drawImage(tmp, 0, 0, R.w, R.h, R.x, R.y, R.w, R.h);
     this.pctx.restore();
-    release(tmp);
     return R;
   }
 
-  /** Write the stroke into the layer surface. Returns an undo patch (or null if nothing changed). */
+  private markTouched(r: Rect) {
+    const cols = Math.ceil(this.w / PATCH_TILE), rows = Math.ceil(this.h / PATCH_TILE);
+    const x0 = Math.max(0, Math.floor(r.x / PATCH_TILE)), x1 = Math.min(cols - 1, Math.floor((r.x + r.w - 1) / PATCH_TILE));
+    const y0 = Math.max(0, Math.floor(r.y / PATCH_TILE)), y1 = Math.min(rows - 1, Math.floor((r.y + r.h - 1) / PATCH_TILE));
+    for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) this.touched.add(ty * cols + tx);
+  }
+  /** the touched tiles as few rectangles: horizontal runs of neighbouring tiles (or one bounding box if there are very many) */
+  private touchedRects(): Rect[] {
+    if (!this.touched.size) return [];
+    const cols = Math.ceil(this.w / PATCH_TILE);
+    const rowsMap = new Map<number, number[]>();
+    for (const idx of this.touched) { const ty = Math.floor(idx / cols); (rowsMap.get(ty) ?? rowsMap.set(ty, []).get(ty)!).push(idx % cols); }
+    const out: Rect[] = [];
+    for (const [ty, xs] of [...rowsMap].sort((a, b) => a[0] - b[0])) {
+      xs.sort((a, b) => a - b);
+      let start = xs[0], prev = xs[0];
+      const push = (a: number, b: number) => {
+        const x = a * PATCH_TILE, y = ty * PATCH_TILE;
+        out.push({ x, y, w: Math.min(this.w, (b + 1) * PATCH_TILE) - x, h: Math.min(this.h, (ty + 1) * PATCH_TILE) - y });
+      };
+      for (let i = 1; i < xs.length; i++) { if (xs[i] !== prev + 1) { push(start, prev); start = xs[i]; } prev = xs[i]; }
+      push(start, prev);
+    }
+    if (out.length > 48) { // a huge stroke: a few big reads are cheaper than hundreds of small ones
+      const all = out.reduce<Rect | null>((u, r) => rectUnion(u, r), null)!;
+      return [all];
+    }
+    return out;
+  }
+
+  /**
+   * Write the stroke into the layer surface. Returns the undo patch (or null if nothing changed).
+   * Only the tiles the stroke touched are read back from the layer — reading a long stroke's whole bounding box off the
+   * GPU is what made every pen-up stall on a tablet — and the "after" pixels are captured later, if the step is ever undone.
+   */
   commit(): StrokePatch | null {
     this.flush();
-    const d = this.dirty && rectIntersect(rectRound(this.dirty), { x: 0, y: 0, w: this.w, h: this.h });
-    if (!d) { this.dispose(); return null; }
+    const rects = this.touchedRects();
+    if (!rects.length) { this.dispose(); return null; }
     const surf = this.o.surface;
-    const before = surf.getPatch(d);
-    surf.ctx.clearRect(d.x, d.y, d.w, d.h);
-    surf.ctx.drawImage(this.preview, d.x, d.y, d.w, d.h, d.x, d.y, d.w, d.h);
+    const saved = surf.snapshotRects(rects); // all copies first (GPU to GPU, no pixel readback), then the write
+    const tiles: PatchTile[] = rects.map((rect, i) => ({ rect, before: saved[i] }));
+    for (const d of rects) {
+      surf.ctx.clearRect(d.x, d.y, d.w, d.h);
+      surf.ctx.drawImage(this.preview, d.x, d.y, d.w, d.h, d.x, d.y, d.w, d.h);
+    }
     surf.touch();
-    const after = surf.getPatch(d);
+    // the preview now equals the layer: keep it for the next stroke on this layer
+    if (!this.direct && !this.released) { spare = { surface: surf, version: surf.version, preview: this.preview }; this.keepPreview = true; }
     this.dispose();
-    return { rect: d, before, after };
+    return { tiles };
   }
   cancel() { this.dispose(); }
   dispose() {
     if (this.released) return;
     this.released = true;
-    release(this.preview);
-    if (this.buf) release(this.buf);
+    if (!this.keepPreview) release(this.preview);
+    if (this.buf) {
+      if (this.pending) this.markTouched(this.pending); // dabs drawn but never flushed (a cancelled stroke) must be wiped too
+      // wipe just the tiles the stroke used and keep the buffer for the next stroke
+      if (this.bctx && this.touched.size && this.touched.size < 4000) { for (const r of this.touchedRects()) this.bctx.clearRect(r.x - 2, r.y - 2, r.w + 4, r.h + 4); if (spareBuf) release(spareBuf); spareBuf = this.buf; }
+      else release(this.buf);
+    }
     if (this.beforeCanvas) release(this.beforeCanvas);
+    if (this.scratch) { this.scratch.width = this.scratch.height = 1; this.scratch = null; }
   }
 }
 

@@ -4,7 +4,7 @@ import type { Mat, Vec } from '../core/geometry';
 import { IDENTITY, mMul, mTranslate, mScale, mRotate, mSkew, mApply, rad } from '../core/geometry';
 import type { Paint, PathNode, QDocument, StrokeStyle, SubPath, VObject, VPath, Page, Layer, VText } from '../core/model';
 import { baseObject, solid } from '../core/model';
-import { inkPolygon, subpathsOf, localGeometryBounds, layoutText, fontString, cssColor } from '../core/vector';
+import { subpathsOf, localGeometryBounds, layoutText, fontString, cssColor } from '../core/vector';
 import { rgbaToHex, parseColor } from '../core/color';
 import { uid } from '../core/util';
 
@@ -359,13 +359,6 @@ export function objectToSvg(o: VObject, defs: string[], assetUrl: (id: string) =
   };
   const a = attrs.join(' ');
   switch (o.type) {
-    case 'ink': {
-      const { poly } = inkPolygon({ ...o, tf: IDENTITY } as any);
-      // inkPolygon bakes tf, so recompute with identity then rely on outer transform attr
-      if (!poly.length) return '';
-      const d = 'M' + poly.map((p) => `${f2(p.x)} ${f2(p.y)}`).join('L') + 'Z';
-      return `<path d="${d}" ${fillAttr()} ${a}/>`;
-    }
     case 'text': {
       const lay = layoutText(o);
       const f = o.font;
@@ -376,8 +369,6 @@ export function objectToSvg(o: VObject, defs: string[], assetUrl: (id: string) =
       const url = assetUrl(o.assetId);
       return url ? `<image x="${f2(o.x)}" y="${f2(o.y)}" width="${f2(o.w)}" height="${f2(o.h)}" href="${url}" preserveAspectRatio="none" ${a}/>` : '';
     }
-    case 'note': return `<rect x="${f2(o.x)}" y="${f2(o.y)}" width="${f2(o.w)}" height="${f2(o.h)}" rx="6" fill="${colorAttr(o.color).rgb}" ${a}/><text x="${f2(o.x + 10)}" y="${f2(o.y + 28)}" font-size="16" font-family="sans-serif">${esc(o.text)}</text>`;
-    case 'markup': return o.quads.map((q) => { const xs = [q[0], q[2], q[4], q[6]], ys = [q[1], q[3], q[5], q[7]]; return `<rect x="${f2(Math.min(...xs))}" y="${f2(Math.min(...ys))}" width="${f2(Math.max(...xs) - Math.min(...xs))}" height="${f2(Math.max(...ys) - Math.min(...ys))}" fill="${colorAttr(o.color).rgb}" style="mix-blend-mode:multiply" opacity="0.5" ${a}/>`; }).join('');
     case 'group': return `<g ${a}>${o.children.map((c) => objectToSvg(c, defs, assetUrl)).join('')}</g>`;
     default: {
       const d = subpathsOf(o).map(pathD).join(' ');

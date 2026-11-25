@@ -6,7 +6,6 @@ import { Emitter, debounce } from '../core/util';
 import { prefs } from './store';
 import { saveEditor } from './storage';
 import { toast } from './bus';
-import { dropPdfSource } from '../pdf/pdfSource';
 
 class Workspace {
   editors: Editor[] = [];
@@ -27,6 +26,8 @@ class Workspace {
     this.editors.push(ed);
     const save = debounce(async () => {
       if (!prefs.get().autosave || !ed.dirty) return;
+      // saving encodes layers and writes megabytes: never in the middle of drawing — look again after the next pause
+      if (performance.now() - ed.lastInputAt < 1500) { save(); return; }
       try { await saveEditor(ed); this.onSaved?.(ed); } catch (e) { console.error('autosave failed', e); }
     }, 2500);
     const off = ed.history.events.on('change', () => { save(); this.bump(); });
@@ -45,7 +46,6 @@ class Workspace {
     this.editors.splice(i, 1);
     if (this.activeId === ed.id) this.activeId = this.editors[Math.min(i, this.editors.length - 1)]?.id ?? null;
     ed.dispose();
-    dropPdfSource(ed.doc.id);
     this.bump();
   }
   /** persist right now (Ctrl+S) */

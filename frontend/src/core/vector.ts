@@ -1,12 +1,11 @@
 // Vector object geometry, painting, bounds and hit-testing.
 
-import { getStroke } from 'perfect-freehand';
 import {
   Bez, Mat, Rect, Vec, IDENTITY, bezFlatten, distToPolyline, mApply, mInvert, mMul, mScaleFactor, mTranslate,
   pointsBounds, rectUnion, rectInflate, transformRectBounds, rad, rectContains, pointInPolygon,
 } from './geometry';
 import type {
-  PathNode, SubPath, VObject, VPath, VText, Paint, StrokeStyle, VInk, FontSpec,
+  PathNode, SubPath, VObject, VPath, VText, Paint, StrokeStyle, FontSpec,
 } from './model';
 import { blendToComposite } from './model';
 import { getImageSync } from './assets';
@@ -68,7 +67,6 @@ export function subpathsOf(o: VObject): SubPath[] {
     case 'ellipse': res = [ellipseSub(o.cx, o.cy, o.rx, o.ry)]; break;
     case 'polygon': res = [polygonSub(o.cx, o.cy, o.r, o.sides, o.rot, o.inner)]; break;
     case 'line': res = [{ closed: false, nodes: [node(o.x1, o.y1), node(o.x2, o.y2)] }]; break;
-    case 'note': res = [rectSub(o.x, o.y, o.w, o.h, 6)]; break;
     case 'image': res = [rectSub(o.x, o.y, o.w, o.h, 0)]; break;
     default: res = [];
   }
@@ -162,70 +160,12 @@ export function layoutText(o: VText): TextLayout {
   return res;
 }
 
-// ---------------- ink ----------------
-export const INK_DEFAULTS: Record<VInk['ink'], Pick<VInk, 'size' | 'thinning' | 'smoothing' | 'streamline' | 'taperStart' | 'taperEnd' | 'cap' | 'simulatePressure'> & { opacity: number; blend: 'normal' | 'multiply' }> = {
-  pen: { size: 4, thinning: 0.25, smoothing: 0.55, streamline: 0.5, taperStart: 0, taperEnd: 0, cap: true, simulatePressure: true, opacity: 1, blend: 'normal' },
-  fountain: { size: 6, thinning: 0.75, smoothing: 0.6, streamline: 0.55, taperStart: 12, taperEnd: 24, cap: true, simulatePressure: true, opacity: 1, blend: 'normal' },
-  pencil: { size: 3, thinning: 0.15, smoothing: 0.4, streamline: 0.35, taperStart: 4, taperEnd: 8, cap: true, simulatePressure: true, opacity: 0.8, blend: 'normal' },
-  highlighter: { size: 28, thinning: 0, smoothing: 0.5, streamline: 0.6, taperStart: 0, taperEnd: 0, cap: false, simulatePressure: false, opacity: 0.45, blend: 'multiply' },
-  marker: { size: 10, thinning: 0.05, smoothing: 0.55, streamline: 0.5, taperStart: 0, taperEnd: 0, cap: true, simulatePressure: false, opacity: 0.95, blend: 'normal' },
-  brush: { size: 14, thinning: 0.9, smoothing: 0.6, streamline: 0.5, taperStart: 20, taperEnd: 40, cap: true, simulatePressure: true, opacity: 1, blend: 'normal' },
-  calligraphy: { size: 12, thinning: 0.6, smoothing: 0.6, streamline: 0.5, taperStart: 8, taperEnd: 16, cap: false, simulatePressure: true, opacity: 1, blend: 'normal' },
-};
-
-const inkCache = new WeakMap<VInk, { k: number; poly: Vec[]; path: Path2D }>();
-export function inkPolygon(o: VInk): { poly: Vec[]; path: Path2D } {
-  const k = mScaleFactor(o.tf);
-  const hit = inkCache.get(o);
-  if (hit && hit.k === k) return hit;
-  const pts: number[][] = [];
-  for (let i = 0; i + 2 < o.pts.length + 0.5; i += 3) {
-    const p = mApply(o.tf, { x: o.pts[i], y: o.pts[i + 1] });
-    pts.push([p.x, p.y, o.pts[i + 2] ?? 0.5]);
-  }
-  const outline = getStroke(pts, {
-    size: o.size * k, thinning: o.thinning, smoothing: o.smoothing, streamline: o.streamline,
-    simulatePressure: o.simulatePressure, last: true,
-    start: { taper: o.taperStart * k, cap: o.cap }, end: { taper: o.taperEnd * k, cap: o.cap },
-  });
-  const poly = outline.map(([x, y]) => ({ x, y }));
-  const path = new Path2D();
-  if (poly.length > 2) {
-    path.moveTo(poly[0].x, poly[0].y);
-    for (let i = 1; i < poly.length; i++) {
-      const a = poly[i], b = poly[(i + 1) % poly.length];
-      path.quadraticCurveTo(a.x, a.y, (a.x + b.x) / 2, (a.y + b.y) / 2);
-    }
-    path.closePath();
-  } else if (poly.length) {
-    // single dot
-    path.arc(pts[0][0], pts[0][1], (o.size * k) / 2, 0, Math.PI * 2);
-  }
-  const res = { k, poly, path };
-  inkCache.set(o, res);
-  return res;
-}
-
 // ---------------- bounds ----------------
 const boundsCache = new WeakMap<object, Rect>();
 export function localGeometryBounds(o: VObject): Rect {
   switch (o.type) {
     case 'text': return layoutText(o).bounds;
-    case 'image': case 'note': return { x: o.x, y: o.y, w: o.w, h: o.h };
-    case 'ink': {
-      const pts: Vec[] = [];
-      for (let i = 0; i + 1 < o.pts.length; i += 3) pts.push({ x: o.pts[i], y: o.pts[i + 1] });
-      return pointsBounds(pts) ?? { x: 0, y: 0, w: 0, h: 0 };
-    }
-    case 'markup': {
-      let r: Rect | null = null;
-      for (const q of o.quads) {
-        const xs = [q[0], q[2], q[4], q[6]], ys = [q[1], q[3], q[5], q[7]];
-        const x = Math.min(...xs), y = Math.min(...ys);
-        r = rectUnion(r, { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y });
-      }
-      return r ?? { x: 0, y: 0, w: 0, h: 0 };
-    }
+    case 'image': return { x: o.x, y: o.y, w: o.w, h: o.h };
     case 'group': {
       let r: Rect | null = null;
       for (const c of o.children) r = rectUnion(r, objectBounds(c, false));
@@ -240,10 +180,6 @@ export function localGeometryBounds(o: VObject): Rect {
 }
 /** Bounds in page space (including transform; optionally inflated by stroke). */
 export function objectBounds(o: VObject, withStroke = true): Rect {
-  if (o.type === 'ink') {
-    const { poly } = inkPolygon(o);
-    return pointsBounds(poly) ?? { x: 0, y: 0, w: 0, h: 0 };
-  }
   const key = withStroke ? o : null;
   if (key) { const hit = boundsCache.get(key); if (hit) return hit; }
   const lb = o.type === 'group' ? localGeometryBounds(o) : localGeometryBounds(o);
@@ -322,12 +258,6 @@ export function drawObject(ctx: CanvasRenderingContext2D, o: VObject, opts: Draw
     ctx.shadowOffsetY = o.shadow.y * opts.scale;
   }
   switch (o.type) {
-    case 'ink': {
-      const { path } = inkPolygon(o);
-      ctx.fillStyle = o.fill?.kind === 'solid' ? cssColor(o.fill.color) : '#000';
-      ctx.fill(path);
-      break;
-    }
     case 'text': drawText(ctx, o); break;
     case 'image': {
       const img = getImageSync(o.assetId);
@@ -339,8 +269,6 @@ export function drawObject(ctx: CanvasRenderingContext2D, o: VObject, opts: Draw
       if (o.stroke) { strokeSetup(ctx, o.stroke); ctx.stroke(worldPath2D(o)); }
       break;
     }
-    case 'note': drawNote(ctx, o); break;
-    case 'markup': drawMarkup(ctx, o); break;
     case 'group': {
       ctx.save();
       ctx.transform(o.tf.a, o.tf.b, o.tf.c, o.tf.d, o.tf.e, o.tf.f);
@@ -412,68 +340,6 @@ function drawText(ctx: CanvasRenderingContext2D, o: VText) {
   ctx.restore();
 }
 
-function drawNote(ctx: CanvasRenderingContext2D, o: Extract<VObject, { type: 'note' }>) {
-  ctx.save();
-  ctx.transform(o.tf.a, o.tf.b, o.tf.c, o.tf.d, o.tf.e, o.tf.f);
-  if (o.collapsed) {
-    ctx.fillStyle = cssColor(o.color);
-    ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1;
-    const kc = Math.max(0.5, o.w / 240);
-    ctx.beginPath(); ctx.roundRect(o.x, o.y, 30 * kc, 30 * kc, 5 * kc); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    for (let i = 0; i < 3; i++) ctx.fillRect(o.x + 6 * kc, o.y + (8 + i * 6) * kc, 18 * kc, 2 * kc);
-  } else {
-    ctx.shadowColor = 'rgba(0,0,0,0.25)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 2;
-    ctx.fillStyle = cssColor(o.color);
-    ctx.beginPath(); ctx.roundRect(o.x, o.y, o.w, o.h, 6); ctx.fill();
-    ctx.shadowColor = 'transparent';
-    const k = Math.max(0.5, o.w / 240);
-    ctx.fillStyle = '#222';
-    ctx.font = `${16 * k}px Segoe UI, system-ui, sans-serif`;
-    ctx.textBaseline = 'top';
-    wrapText(ctx, o.text, o.x + 10 * k, o.y + 10 * k, o.w - 20 * k, 20 * k, o.h - 14 * k);
-  }
-  ctx.restore();
-}
-function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxW: number, lh: number, maxH: number) {
-  let cy = y;
-  for (const para of text.split('\n')) {
-    let line = '';
-    for (const word of para.split(' ')) {
-      const t = line ? line + ' ' + word : word;
-      if (ctx.measureText(t).width > maxW && line) { ctx.fillText(line, x, cy); cy += lh; line = word; } else line = t;
-      if (cy > y + maxH) return;
-    }
-    ctx.fillText(line, x, cy); cy += lh;
-  }
-}
-
-function drawMarkup(ctx: CanvasRenderingContext2D, o: Extract<VObject, { type: 'markup' }>) {
-  ctx.save();
-  ctx.transform(o.tf.a, o.tf.b, o.tf.c, o.tf.d, o.tf.e, o.tf.f);
-  const col = cssColor(o.color);
-  for (const q of o.quads) {
-    const xs = [q[0], q[2], q[4], q[6]], ys = [q[1], q[3], q[5], q[7]];
-    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
-    if (o.kind === 'highlight') {
-      ctx.globalCompositeOperation = 'multiply';
-      ctx.fillStyle = col; ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
-    } else {
-      ctx.strokeStyle = col; ctx.lineWidth = Math.max(1.2, (y1 - y0) / 14); ctx.lineCap = 'round';
-      ctx.beginPath();
-      if (o.kind === 'underline') { ctx.moveTo(x0, y1 - 1); ctx.lineTo(x1, y1 - 1); }
-      else if (o.kind === 'strike') { const ym = (y0 + y1) / 2; ctx.moveTo(x0, ym); ctx.lineTo(x1, ym); }
-      else {
-        const amp = Math.max(1.2, (y1 - y0) / 12), step = amp * 2;
-        ctx.moveTo(x0, y1 - 1);
-        for (let x = x0, up = true; x < x1; x += step, up = !up) ctx.lineTo(Math.min(x + step, x1), y1 - 1 + (up ? -amp : amp));
-      }
-      ctx.stroke();
-    }
-  }
-  ctx.restore();
-}
-
 // ---------------- hit testing ----------------
 let hitCtx: CanvasRenderingContext2D | null = null;
 const hctx = () => (hitCtx ??= document.createElement('canvas').getContext('2d')!);
@@ -483,24 +349,10 @@ export function hitTestObject(o: VObject, p: Vec, tol: number): boolean {
   const bounds = objectBounds(o);
   if (!rectContains(rectInflate(bounds, tol), p)) return false;
   switch (o.type) {
-    case 'ink': {
-      const { poly } = inkPolygon(o);
-      if (poly.length > 2 && pointInPolygon(p, poly)) return true;
-      const pts: Vec[] = [];
-      const k = mScaleFactor(o.tf);
-      for (let i = 0; i + 1 < o.pts.length; i += 3) pts.push(mApply(o.tf, { x: o.pts[i], y: o.pts[i + 1] }));
-      return distToPolyline(p, pts) <= (o.size * k) / 2 + tol;
-    }
-    case 'text': case 'image': case 'note': case 'markup': {
+    case 'text': case 'image': {
       const inv = mInvert(o.tf);
       const lp = mApply(inv, p);
       const lb = localGeometryBounds(o);
-      if (o.type === 'markup') {
-        return o.quads.some((q) => {
-          const xs = [q[0], q[2], q[4], q[6]], ys = [q[1], q[3], q[5], q[7]];
-          return rectContains({ x: Math.min(...xs) - tol, y: Math.min(...ys) - tol, w: Math.max(...xs) - Math.min(...xs) + 2 * tol, h: Math.max(...ys) - Math.min(...ys) + 2 * tol }, lp);
-        });
-      }
       return rectContains(rectInflate(lb, tol / Math.max(0.001, mScaleFactor(o.tf))), lp);
     }
     case 'group': {
@@ -533,7 +385,7 @@ export function translateObject<T extends VObject>(o: T, dx: number, dy: number)
 }
 /** Bake the transform into geometry so node edits operate in page space (paths only). */
 export function toPathObject(o: VObject): VPath | null {
-  if (o.type === 'ink' || o.type === 'text' || o.type === 'image' || o.type === 'group' || o.type === 'markup') return null;
+  if (o.type === 'text' || o.type === 'image' || o.type === 'group') return null;
   const paths: SubPath[] = subpathsOf(o).map((sp) => ({
     closed: sp.closed,
     nodes: sp.nodes.map((n) => {
@@ -545,7 +397,7 @@ export function toPathObject(o: VObject): VPath | null {
   }));
   return {
     id: o.id, type: 'path', name: o.name, tf: IDENTITY, fill: o.fill, stroke: o.stroke, opacity: o.opacity, blend: o.blend,
-    hidden: o.hidden, locked: o.locked, link: o.link, shadow: o.shadow, paths, fillRule: o.type === 'path' ? o.fillRule : 'nonzero',
+    hidden: o.hidden, locked: o.locked, shadow: o.shadow, paths, fillRule: o.type === 'path' ? o.fillRule : 'nonzero',
   };
 }
 export function cloneObject<T extends VObject>(o: T, deep = true): T {
@@ -557,8 +409,6 @@ export function objectLabel(o: VObject): string {
   if (o.name) return o.name;
   switch (o.type) {
     case 'text': return o.text.split('\n')[0].slice(0, 24) || 'Text';
-    case 'ink': return 'Ink stroke';
-    case 'markup': return o.quote ? `${o.kind}: ${o.quote.slice(0, 24)}` : o.kind;
     default: return o.type[0].toUpperCase() + o.type.slice(1);
   }
 }

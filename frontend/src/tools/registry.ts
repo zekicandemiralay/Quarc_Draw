@@ -11,8 +11,7 @@ import { ShapeTool, FreeformTool, PenTool } from './shapeTools';
 import { NodeTool } from './nodeTool';
 import { TextTool } from './textTool';
 import { CropTool } from './cropTool';
-import { InkTool, StrokeEraserTool, LaserTool, NoteTool, ImageTool, MeasureTool, ObjectLassoTool } from './inkTools';
-import { MarkupTool } from '../pdf/markupTool';
+import { ImageTool, MeasureTool } from './utilityTools';
 import { toolMeta } from './catalog';
 
 export function createTool(id: string, ed: Editor): Tool {
@@ -38,23 +37,8 @@ export function createTool(id: string, ed: Editor): Tool {
     case 'node': return new NodeTool(ed);
     case 'text': return new TextTool(ed);
     case 'crop': return new CropTool(ed);
-    case 'ink-pen': return new InkTool(ed, id, name, 'pen');
-    case 'ink-fountain': return new InkTool(ed, id, name, 'fountain');
-    case 'ink-pencil': return new InkTool(ed, id, name, 'pencil');
-    case 'ink-marker': return new InkTool(ed, id, name, 'marker');
-    case 'ink-brush': return new InkTool(ed, id, name, 'brush');
-    case 'highlighter': return new InkTool(ed, id, name, 'highlighter');
-    case 'ink-eraser': return new StrokeEraserTool(ed);
-    case 'object-lasso': return new ObjectLassoTool(ed);
-    case 'laser': return new LaserTool(ed);
-    case 'note': return new NoteTool(ed);
     case 'image': return new ImageTool(ed);
     case 'measure': return new MeasureTool(ed);
-    case 'markup-highlight': return new MarkupTool(ed, id, 'highlight');
-    case 'markup-underline': return new MarkupTool(ed, id, 'underline');
-    case 'markup-strike': return new MarkupTool(ed, id, 'strike');
-    case 'markup-squiggle': return new MarkupTool(ed, id, 'squiggle');
-    case 'text-select': return new MarkupTool(ed, id, 'select', 'Select text');
     default: return new HandTool(ed);
   }
 }

@@ -11,7 +11,6 @@ import { BLEND_MODES } from '../core/model';
 import type { BlendMode, Paint } from '../core/model';
 import { openDialog } from '../app/bus';
 import { BRUSH_CATEGORIES } from '../brush/presets';
-import { INK_DEFAULTS } from '../core/vector';
 import type { TextTool } from '../tools/textTool';
 import type { TransformTool } from '../tools/moveTools';
 import type { CropTool } from '../tools/cropTool';
@@ -41,7 +40,6 @@ export function OptionsBar({ ed }: { ed: Editor }) {
   const m = toolMeta(toolId);
   const o = ed.opts, b = ed.brush;
   const set = (p: Partial<typeof o>) => ed.setToolOpts(p);
-  const ws = prefs.useSelect((p) => p.workspace);
   const brushFamily = ['brush', 'eraser', 'smudge', 'blur', 'sharpen', 'dodge', 'burn', 'clone'].includes(toolId);
   const selMode = (
     <Seg value={o.selectMode} onChange={(v) => set({ selectMode: v })} options={[
@@ -93,7 +91,7 @@ export function OptionsBar({ ed }: { ed: Editor }) {
       case 'select-brush':
         body = (<><Slider label="Size" value={o.selectBrushSize} min={4} max={300} format={(v) => `${v}px`} onChange={(v) => set({ selectBrushSize: v })} /><span className="hint">Alt = subtract</span><SelectionActions ed={ed} /></>);
         break;
-      case 'move': body = ws === 'studio' ? <><ObjectQuickActions ed={ed} /><span className="hint">Alt-drag duplicates · Shift constrains</span></> : <ObjectQuickActions ed={ed} />; break;
+      case 'move': body = <><ObjectQuickActions ed={ed} /><span className="hint">Alt-drag duplicates · Shift constrains</span></>; break;
       case 'transform': {
         const t = ed.getTool('transform') as TransformTool;
         body = (<><button className="btn sm" onClick={() => t.flip(true)}>Flip H</button><button className="btn sm" onClick={() => t.flip(false)}>Flip V</button>
@@ -135,23 +133,6 @@ export function OptionsBar({ ed }: { ed: Editor }) {
           {(toolId === 'rect' || toolId === 'ellipse') && <Switch on={o.shapeFromCenter} onChange={(v) => set({ shapeFromCenter: v })} label="From centre" />}</>);
         break;
       case 'text': body = <TextOptions ed={ed} />; break;
-      case 'ink-pen': case 'ink-fountain': case 'ink-pencil': case 'ink-marker': case 'ink-brush': case 'highlighter': {
-        const kind = o.inkKind, pf = o.inkPrefs[kind] ?? { size: INK_DEFAULTS[kind].size, opacity: INK_DEFAULTS[kind].opacity };
-        const upd = (p: Partial<typeof pf>) => set({ inkPrefs: { ...o.inkPrefs, [kind]: { ...pf, ...p } } });
-        body = (<><Slider label="Size" value={toLog(pf.size)} min={0} max={Math.log(120)} step={0.01} format={(v) => `${logSize(v)}px`} onChange={(v) => upd({ size: logSize(v) })} />
-          <Slider label="Opacity" value={pf.opacity} min={0.1} max={1} step={0.01} format={(v) => `${Math.round(v * 100)}%`} onChange={(v) => upd({ opacity: v })} />
-          <Slider label="Smooth" value={o.inkSmoothing} min={0} max={1} step={0.01} format={(v) => `${Math.round(v * 100)}%`} onChange={(v) => set({ inkSmoothing: v })} />
-          <Switch on={o.inkPressure} onChange={(v) => set({ inkPressure: v })} label="Pressure" /><Switch on={o.inkShapeSnap} onChange={(v) => set({ inkShapeSnap: v })} label="Hold to snap shape" /></>);
-        break;
-      }
-      case 'ink-eraser':
-        body = (<><Seg value={o.strokeEraserMode} onChange={(v) => set({ strokeEraserMode: v })} options={[{ value: 'stroke', label: 'Whole stroke' }, { value: 'pixel', label: 'Partial' }]} /><Slider label="Size" value={o.strokeEraserSize} min={6} max={120} format={(v) => `${v}px`} onChange={(v) => set({ strokeEraserSize: v })} /></>);
-        break;
-      case 'note': body = (<><div className="opt"><label>Colour</label>{['#ffe066', '#ffb3c1', '#b8f2e6', '#c7d2fe', '#ffd6a5'].map((c) => <button key={c} className={`swatch ${o.noteColor === c ? 'on' : ''}`} style={{ background: c, outline: o.noteColor === c ? '2px solid var(--accent)' : undefined }} onClick={() => set({ noteColor: c })} />)}</div><span className="hint">Click the page to place a note</span></>); break;
-      case 'markup-highlight': case 'markup-underline': case 'markup-strike': case 'markup-squiggle': case 'text-select':
-        body = (<>{toolId !== 'text-select' && <div className="opt"><label>Colour</label>{['#ffe14d', '#7df0a3', '#7fd4ff', '#ffa6c9', '#ffb86b', '#ff4d4d'].map((c) => <button key={c} className="swatch" style={{ background: c, outline: o.markupColor === c ? '2px solid var(--accent)' : undefined }} onClick={() => set({ markupColor: c })} />)}</div>}<span className="hint">{toolId === 'text-select' ? 'Drag over text to copy it' : 'Drag over text to mark it up'}</span></>);
-        break;
-      case 'laser': body = (<div className="opt"><label>Colour</label>{['#ff2d55', '#ffd60a', '#30d158', '#0a84ff'].map((c) => <button key={c} className="swatch" style={{ background: c, outline: o.laserColor === c ? '2px solid var(--accent)' : undefined }} onClick={() => set({ laserColor: c })} />)}</div>); break;
       case 'hand': case 'zoom': case 'rotate-view':
         body = (<><button className="btn sm" onClick={() => ed.zoomTo(1)}>100%</button><button className="btn sm" onClick={() => ed.fitPage()}>Fit page</button><button className="btn sm" onClick={() => ed.fitWidth()}>Fit width</button><button className="btn sm" onClick={() => { ed.view.resetRotation(); ed.changed('view'); }}>Reset rotation</button></>);
         break;
@@ -164,7 +145,7 @@ export function OptionsBar({ ed }: { ed: Editor }) {
       <div className="tool-title">{m && <Icon name={m.icon} size={17} />}{m?.name ?? toolId}</div>
       {body}
       <div className="spacer" />
-      {ws === 'studio' && toolId !== 'move' && <ObjectContextHint ed={ed} />}
+      {toolId !== 'move' && <ObjectContextHint ed={ed} />}
     </div>
   );
 }

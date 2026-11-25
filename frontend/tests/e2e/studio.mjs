@@ -1,4 +1,4 @@
-// Studio workspace: raster painting, layers, selections, shapes, text, filters, history.
+// Raster painting, layers, selections, shapes, text, filters, history.
 export async function studio({ page, rep, shot, assert, helpers: h }) {
   await rep.step('new drawing via the New dialog', async () => {
     await page.goto(h.url); await page.waitForSelector('.library');

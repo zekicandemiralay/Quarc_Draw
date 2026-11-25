@@ -1,6 +1,6 @@
 # Quarc Draw — notes for Claude sessions
 
-Layered raster + vector drawing studio (Studio / Notes / Reader workspaces) in the QuarcNet suite. Package `com.quarc.draw`,
+Layered raster + vector drawing studio in the QuarcNet suite. It is a drawing app only: notes and PDF reading belong to Quarc Notes / Quarc Reader (v1.0.0 had Notes and Reader workspaces inside Draw; they were removed on purpose — do not bring them back). Package `com.quarc.draw`,
 GitHub `zekicandemiralay/Quarc_Draw`, web port **4009** on `quarcnet0.tail84500c.ts.net`. See README.md for features and the
 exact commands.
 
@@ -26,6 +26,17 @@ check.sh, backup.sh, restore.sh and `.github/workflows/{tests,desktop-release}.y
   Windows page is `http://tauri.localhost`, which `window_may_use` in the kit accepts.
 - **No `window.prompt/confirm`:** some webviews block them. Use `confirmThen` / `askText` / `openDialog('prompt', …)` from
   `app/bus.ts`.
+- **Drawing performance is a design constraint** (tablets): a stroke must only touch what it changes. `ui/canvas/viewRenderer.ts`
+  repaints just the stroke's dirty rectangle (`Editor.requestRenderRect`; full repaint when a layer has effects or pages overlap)
+  and caches the layers under the painted layer; `brush/engine.ts` composites once per input batch (`Tool.moveEnd`), keeps its two
+  page-sized canvases for the next stroke (valid only while `RasterSurface.version` is unchanged — any `surface.ctx` access
+  counts as a change) and saves undo pixels as canvases of the touched tiles (never `getImageData` on a layer: the first readback
+  moves the canvas off the GPU and stalls ~100 ms). Don't re-render the React status bar per pointer move. Measure with
+  `npm run perf` (frames per second) — the `render` e2e group checks incremental repaints equal a full repaint.
+- **The home-screen painting** (`frontend/public/art/harbour-at-dusk.webp`, shown by `Library.tsx` `Hero` and the About box) was made
+  in the app by `frontend/scripts/paint-artwork.mjs` + `scripts/artwork/painter.js` (`npm run paint`, seeded and reproducible; full-size
+  `.qdraw`/`.png` are in `art/`, git-ignored). Shown only on the home screen, hidden on phones, switchable in Preferences — don't spread
+  it around the app.
 - **Saving files:** everything goes through `saveBlob` / `downloadBlob` in `core/util.ts` (Android share sheet, Tauri Save dialog,
   browser download).
 - One undecodable remote document must not stop the sync round (`sync/engine.ts` skips it and logs it); sign-in, network and
@@ -33,8 +44,8 @@ check.sh, backup.sh, restore.sh and `.github/workflows/{tests,desktop-release}.y
 
 ## Tests
 
-`cd backend && npm test` (12), `cd frontend && npm run typecheck && npm test` (36) and `node tests/e2e/run.mjs [group]` after
-`npm run build` (79 steps, needs Edge/Chrome; the backend is started by the suite with the development login `--dev-auth`,
+`cd backend && npm test` (12), `cd frontend && npm run typecheck && npm test` (32) and `node tests/e2e/run.mjs [group]` after
+`npm run build` (60 steps, needs Edge/Chrome; the backend is started by the suite with the development login `--dev-auth`,
 password `dev`; `E2E_DEBUG=1` shows its output). The sync group is timing-sensitive: do not run it while Docker/Gradle builds
 are hogging the machine. Desktop: `cd desktop/src-tauri && cargo test`.
 

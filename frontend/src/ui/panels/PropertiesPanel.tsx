@@ -80,13 +80,13 @@ export function PropertiesPanel({ ed }: { ed: Editor }) {
           <dt>Page</dt><dd>{pg.name}</dd><dt>Size</dt><dd>{pg.width} × {pg.height} px</dd><dt>Resolution</dt><dd>{ed.doc.dpi} dpi</dd>
           <dt>Layers</dt><dd>{ed.countLayers()}</dd>
         </dl>
-        <button className="btn sm" onClick={() => openDialog('page-setup')}>Page background & template…</button>
+        <button className="btn sm" onClick={() => openDialog('page-setup')}>Page background…</button>
       </div>
     );
   }
   const o = objs[0], single = objs.length === 1;
   const b = objectsBounds(objs)!;
-  const hasFill = objs.some((x) => x.type !== 'line' && x.type !== 'ink' && x.type !== 'image' && x.type !== 'markup' && x.type !== 'note');
+  const hasFill = objs.some((x) => x.type !== 'line' && x.type !== 'image');
   const geometry = (nb: { x: number; y: number; w: number; h: number }) => {
     const sx = b.w > 0 ? nb.w / b.w : 1, sy = b.h > 0 ? nb.h / b.h : 1;
     const m = mMul(mTranslate(nb.x, nb.y), mMul(mScale(sx, sy), mTranslate(-b.x, -b.y)));
@@ -108,8 +108,7 @@ export function PropertiesPanel({ ed }: { ed: Editor }) {
       <div className="row"><span className="hint">Rotate by</span><NumInput value={0} onChange={rotateBy} width={60} suffix="°" /><button className="btn sm" onClick={() => rotateBy(90)}>90°</button><button className="btn sm" onClick={() => runCommand('object.flipH')}>Flip H</button><button className="btn sm" onClick={() => runCommand('object.flipV')}>Flip V</button></div>
       <div className="divider" />
       {hasFill && <PaintEditor label="Fill" paint={o.fill} onChange={(p) => upd((x) => ({ ...x, fill: p }), 'Fill')} />}
-      {(o.type === 'ink' || o.type === 'markup' || o.type === 'note') && o.type === 'ink' && <Field label="Colour"><ColorButton color={o.fill?.kind === 'solid' ? o.fill.color : '#000'} onChange={(c) => upd((x) => ({ ...x, fill: solid(c) }), 'Colour')} /></Field>}
-      {o.type !== 'ink' && o.type !== 'markup' && o.type !== 'note' && (
+      {(
         <div className="col" style={{ gap: 6 }}>
           <Field label="Stroke">
             <ColorButton color={o.stroke?.color ?? '#00000000'} onChange={(c) => upd((x) => ({ ...x, stroke: { ...(x.stroke ?? { width: 2, cap: 'round', join: 'round', dash: [] }), color: c } }), 'Stroke')} />
@@ -131,15 +130,7 @@ export function PropertiesPanel({ ed }: { ed: Editor }) {
       {single && o.type === 'rect' && <Slider label="Corner radius" value={o.rx} min={0} max={Math.min(o.w, o.h) / 2} onChange={(v) => upd((x) => (x.type === 'rect' ? { ...x, rx: v } : x), 'Corner radius')} />}
       {single && o.type === 'polygon' && (<><Slider label="Sides" value={o.sides} min={3} max={24} onChange={(v) => upd((x) => (x.type === 'polygon' ? { ...x, sides: v } : x), 'Sides')} /><Slider label="Star depth" value={o.inner} min={0} max={0.95} step={0.01} onChange={(v) => upd((x) => (x.type === 'polygon' ? { ...x, inner: v } : x), 'Star')} /></>)}
       {single && o.type === 'line' && <Field label="Arrows"><button className={`btn sm ${o.arrowStart ? 'on' : ''}`} onClick={() => upd((x) => (x.type === 'line' ? { ...x, arrowStart: !x.arrowStart } : x), 'Arrow')}>Start</button><button className={`btn sm ${o.arrowEnd ? 'on' : ''}`} onClick={() => upd((x) => (x.type === 'line' ? { ...x, arrowEnd: !x.arrowEnd } : x), 'Arrow')}>End</button></Field>}
-      {single && o.type === 'ink' && <Slider label="Pen size" value={o.size} min={0.5} max={120} step={0.5} onChange={(v) => upd((x) => (x.type === 'ink' ? { ...x, size: v } : x), 'Pen size')} />}
       {single && o.type === 'text' && <TextProps ed={ed} o={o} upd={upd} />}
-      {single && o.type === 'note' && (<><Field label="Colour">{['#ffe066', '#ffb3c1', '#b8f2e6', '#c7d2fe', '#ffd6a5'].map((c) => <button key={c} className="swatch" style={{ background: c }} onClick={() => upd((x) => (x.type === 'note' ? { ...x, color: c } : x), 'Note colour')} />)}</Field>
-        <button className="btn sm" onClick={() => openDialog('note', { objId: o.id, editorId: ed.id })}>Edit note text…</button></>)}
-      {single && o.type === 'markup' && (<><Field label="Colour">{['#ffe14d', '#7df0a3', '#7fd4ff', '#ffa6c9', '#ffb86b'].map((c) => <button key={c} className="swatch" style={{ background: c }} onClick={() => upd((x) => (x.type === 'markup' ? { ...x, color: c } : x), 'Markup colour')} />)}</Field>
-        <div className="hint">“{o.quote.slice(0, 120)}”</div>
-        <textarea className="input" rows={3} placeholder="Add a comment…" value={o.comment} onKeyDown={(e) => e.stopPropagation()} onChange={(e) => upd((x) => (x.type === 'markup' ? { ...x, comment: e.target.value } : x), 'Comment')} /></>)}
-      <Field label="Link"><input className="input grow" placeholder="https://… or page number" value={o.link?.url ?? (o.link?.page !== undefined ? String(o.link.page + 1) : '')} onKeyDown={(e) => e.stopPropagation()}
-        onChange={(e) => { const v = e.target.value.trim(); upd((x) => ({ ...x, link: !v ? undefined : /^\d+$/.test(v) ? { page: parseInt(v) - 1 } : { url: v } }), 'Link'); }} /></Field>
     </div>
   );
 }

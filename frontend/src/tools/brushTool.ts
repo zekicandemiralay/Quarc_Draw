@@ -90,8 +90,9 @@ export class BrushTool extends Tool {
       this.stroke.move(p);
     } else this.stroke.begin(p);
     this.last = { x: p.x, y: p.y };
-    this.stroke.flush();
-    ed.requestRender();
+    // the stroke's preview looks exactly like the layer did, apart from the first dab: no need to repaint the whole view
+    const r = this.stroke.flush();
+    if (r) ed.requestRenderRect(ed.page, r); else ed.requestRender();
   }
 
   pointerMove(e: ToolPointer) {
@@ -100,8 +101,14 @@ export class BrushTool extends Tool {
     const p = this.pt(e);
     this.stroke.move(p);
     this.last = { x: p.x, y: p.y };
-    this.stroke.flush();
-    this.ed.requestRender();
+  }
+
+  /** a pen reports several samples per frame: composite the stroke once for all of them and repaint only what they touched */
+  moveEnd() {
+    if (!this.stroke || !this.ctx) return;
+    const r = this.stroke.flush();
+    const page = this.ed.doc.pages.find((p) => p.id === this.ctx!.pageId);
+    if (r && page) this.ed.requestRenderRect(page, r);
     this.ed.requestOverlay();
   }
 

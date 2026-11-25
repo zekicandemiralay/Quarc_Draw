@@ -1,25 +1,21 @@
 <p align="center"><img src="logo.png" width="112" alt="Quarc Draw logo" /></p>
 
 <h1 align="center">Quarc Draw</h1>
-<p align="center">A professional layered <b>raster + vector drawing studio</b> with <b>Notes</b> and <b>PDF Reader</b> modes — local-first, offline-capable, and syncable through the folder, server or WebDAV share you already trust.</p>
+<p align="center">A professional layered <b>raster + vector drawing studio</b> — local-first, offline-capable, and syncable through the folder, server or WebDAV share you already trust.</p>
 
 <p align="center"><i>By QuarcNet</i></p>
 
 ---
 
-Quarc Draw is a single web app (TypeScript · React · Canvas 2D) that runs in any modern browser and installs as a desktop / tablet app (PWA). One engine powers three workspaces:
+Quarc Draw is a single web app (TypeScript · React · Canvas 2D) that runs in any modern browser and installs as a desktop / tablet app (PWA). Think Photoshop · Krita · Procreate · Illustrator: pixel layers and vector layers side by side, pressure-sensitive brushes, selections, filters, adjustment layers, effects, masks, symmetry, text and bezier paths.
 
-| Workspace | Think… | What it is |
-|---|---|---|
-| 🎨 **Studio** | Photoshop · Krita · Procreate · Illustrator | Pixel layers + vector layers, pressure-sensitive brushes, selections, filters, adjustment layers, effects, masks, symmetry, text, bezier paths |
-| ✍️ **Notes** | GoodNotes · Notability · OneNote | Multi-page notebooks with lined / grid / dotted / Cornell / music paper, **vector ink** (erase or lasso whole strokes, hold-to-snap shapes), sticky notes, images, laser pointer, presentation mode |
-| 📄 **Reader** | Acrobat · Xodo · Preview | Open a PDF, search it, highlight / underline / strike / squiggle selected text, add ink, text, notes and signatures, then **export the marks inside the original PDF** |
+Notes and PDF reading live in their own Quarc apps (Quarc Notes, Quarc Reader); Quarc Draw is only for drawing.
 
-Switch workspaces any time from the title bar — they share documents, layers and tools.
+The picture on the home screen and in the About box, *Harbour at Dusk*, is an oil painting made **inside Quarc Draw** — a script drives the real app with pen events, so every stroke comes from its own Oil Bristle brush and layers (see [art/README.md](art/README.md); *Preferences* can hide it).
 
 ## Features
 
-### Drawing & painting (Studio)
+### Drawing & painting
 - **Layers**: pixel, vector, group, and **adjustment layers**; 17 blend modes, opacity, clipping masks, alpha lock, raster **layer masks** (paint black/white), colour labels, drag-and-drop reordering, thumbnails
 - **Non-destructive layer effects**: drop shadow, inner shadow, outer glow, stroke, colour overlay
 - **Brush engine**: dab-based with pressure / tilt dynamics, stabiliser, spacing, scatter, jitter, angle-follows-stroke, procedural grain textures (paper / canvas / rough), wet colour mixing, image tips — **42 presets** (pencils, inks, markers, oil, acrylic, watercolour, charcoal, pastel, spray, stars, leaves, erasers…) plus a full settings editor and "save as brush"
@@ -34,11 +30,8 @@ Switch workspaces any time from the title bar — they share documents, layers a
 - **Drawing aids**: symmetry (vertical / horizontal / quadrant / radial), perspective guides, rulers with units (px / in / cm / mm / pt), draggable guides, grid + isometric grid, snapping to grid / guides / objects, pixel grid at high zoom, view rotation & flip
 - **Colour**: HSV picker with alpha, harmony generator, 11 built-in palettes + your own, eyedropper (1–11 px averaging)
 
-### Notes & reading
-- **Pages** with thumbnails, drag-to-reorder, bookmarks, free / vertical / horizontal / spread / grid layouts; **14 procedural paper templates**
-- **Vector ink**: pen, fountain pen, pencil, marker, brush pen, highlighter — pressure-variable width, palm rejection, pen-only mode, pen-eraser end, **stroke eraser** (whole or partial), object **lasso**, hold-still **shape recognition** (line / ellipse / rectangle / polygon)
-- **PDF**: lazy high-resolution rendering, full-text **search**, outline, **text markup**, copy text, annotation list with comments, signature pad, **export into the original PDF**
-- Sticky notes, images as movable objects, hyperlinks (URL or page), laser pointer, **presentation mode**
+### Pages (artboards)
+- Several pages per document with thumbnails and drag-to-reorder; single / vertical / horizontal / spread / grid / free layouts. Handy for comic pages, storyboards, sprite sheets — and **every page is a frame** when you export an animated GIF
 
 ### Files, import & export
 | | Import | Export |
@@ -46,7 +39,7 @@ Switch workspaces any time from the title bar — they share documents, layers a
 | Native project `.qdraw` | ✅ | ✅ (all layers, masks, vectors, assets, thumbnail) |
 | PNG · JPEG · WebP · AVIF · BMP · GIF · ICO | ✅ | ✅ (scale, quality, transparency; animated GIF from pages; ICO multi-size) |
 | SVG | ✅ editable vectors (paths, arcs, gradients, CSS, transforms, text) | ✅ |
-| PDF | ✅ annotatable pages | ✅ flattened pages **or** annotate-the-original |
+| PDF | — | ✅ one page per artboard |
 | PSD | ✅ layers, groups, blend modes | ✅ layered |
 | OpenRaster `.ora` (Krita / GIMP) | ✅ | ✅ |
 | Clipboard images, drag & drop, fonts (`ttf/otf/woff`), print | ✅ | ✅ copy PNG, share, print |
@@ -154,9 +147,8 @@ frontend/            the web app (TypeScript · React · Canvas 2D)
     brush/           brush engine + presets
     filters/         pure pixel algorithms + filter registry (unit-tested)
     editor/          Editor controller + layer / page / object / raster operations
-    tools/           every tool (brush, selection, transform, vector, ink, text, crop…)
+    tools/           every tool (brush, selection, transform, vector, text, crop…)
     io/              .qdraw, SVG, PSD, ORA, exporters, importers
-    pdf/             pdf.js wrapper, text markup, search
     sync/            engine + providers (Quarc account, folder, WebDAV, Dropbox)
     app/             commands, preferences, storage (IndexedDB), workspace, the Quarc account
     lib/             API address, Quarc Store sign-in kit
@@ -176,12 +168,23 @@ Design notes: vector objects are immutable and raster surfaces are shared by ref
 cd backend && npm test                       # 12 tests: the Quarc login, accounts, revisions, CORS, live updates
 cd frontend
 npm run typecheck
-npm test                                     # 36 unit tests (geometry, colour, filters, selection, flood fill, history, SVG paths, shape recognition…)
+npm test                                     # 32 unit tests (geometry, colour, filters, selection, flood fill, history, SVG paths, transform box…)
 npm run build && npm run test:e2e            # browser end-to-end suite (needs Edge or Chrome installed)
 ```
 
-The e2e suite drives the production build and starts the real backend (with the development login): painting with every brush preset, layers & masks, selections, vector tools, text, filters, notebooks with pen-pressure ink and shape snapping, PDF import / search / markup / annotated export, round-tripping every file format, two-device sync with conflicts, deletions, sign-in and sign-out (against the real server and a mock WebDAV server), pixel-level checks of blend modes, clipping, adjustment layers and effects, and more.
-Run a single group: `node tests/e2e/run.mjs notes` (`studio`, `notes`, `reader`, `io`, `sync`, `render`, `ui`). Screenshots land in `frontend/tests/e2e/out/`.
+The e2e suite drives the production build and starts the real backend (with the development login): painting with every brush preset, layers & masks, selections, vector tools, text, filters, incremental repainting checked pixel for pixel against a full repaint, round-tripping every file format, two-device sync with conflicts, deletions, sign-in and sign-out (against the real server and a mock WebDAV server), pixel-level checks of blend modes, clipping, adjustment layers and effects, and more.
+Run a single group: `node tests/e2e/run.mjs render` (`studio`, `io`, `sync`, `render`, `ui`). Screenshots land in `frontend/tests/e2e/out/`.
+
+## Performance
+
+Drawing stays fluent on large canvases and slow devices because a stroke only does the work its pixels need:
+
+- while a stroke is painted, only the small area it touched is composited and repainted — not every layer of the whole view — and once a stroke has been going for a few frames the layers under it are rendered once into a cache;
+- the stroke's two page-sized canvases are kept for the next stroke on the same layer, so consecutive strokes start instantly;
+- undo patches hold only the tiles a stroke touched, kept as canvases (no pixel read-back from the graphics card), and the "redo" half is captured the first time you undo;
+- the status bar is not updated while you draw, and autosave waits for a pause.
+
+`cd frontend && npm run build && npm run perf` measures the frames per second of a pen stroke on a large canvas with many layers (a throttled CPU and a 2× screen stand in for a tablet): see `tests/e2e/perf-fps.mjs` for the options.
 
 ## Known limitations
 
@@ -189,11 +192,11 @@ Being upfront about what is *not* (yet) here:
 
 - Colour is sRGB only — no CMYK / ICC profiles, no 16-bit or HDR canvases.
 - No liquify / mesh-warp, no animation timeline (pages can be exported as an animated GIF "flipbook").
-- No handwriting recognition / OCR, no PDF form filling, no real-time multi-user co-editing (sync is per document with conflict copies).
-- PSD export rasterises text / vector layers and skips adjustment layers; SVG import ignores filters, masks and clip-paths; exported PDF marks are an image overlay on the original page rather than native PDF annotation objects.
+- No real-time multi-user co-editing (sync is per document with conflict copies).
+- PSD export rasterises text / vector layers and skips adjustment layers; SVG import ignores filters, masks and clip-paths; PDF export embeds each page as an image.
 - Folder sync needs a Chromium-based browser or the Windows app (File System Access API); it is not available on Android.
 - The Mac and Linux apps are built but only the Windows and Android apps are tested by the author; "Save as" there uses the system's native dialog.
-- Opening a `.qdraw` / PDF by double-clicking it in the file manager is not wired up yet (use File ▸ Open, or drag a file onto the window).
+- Opening a `.qdraw` by double-clicking it in the file manager is not wired up yet (use File ▸ Open, or drag a file onto the window).
 - Very large canvases (≥ 8000 px) are limited by browser memory; each pixel layer costs width × height × 4 bytes.
 
 ## Privacy

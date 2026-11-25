@@ -49,7 +49,7 @@ reg(
   C('file.saveas', 'Save a copy as .qdraw…', 'File', ({ ed }) => ed && A.saveAsFile(ed), { keys: 'Ctrl+Shift+S', enabled: has }),
   C('file.export', 'Export…', 'File', () => openDialog('export'), { keys: 'Ctrl+Shift+E', enabled: has }),
   C('file.export.quick', 'Quick export PNG', 'File', async ({ ed }) => { if (!ed) return; const { exportDocument, defaultExportOptions } = await import('../io/exporters'); const { downloadBlob } = await import('../core/util'); const r = await exportDocument(ed, defaultExportOptions()); downloadBlob(r.blob, r.name); toast(`Exported ${r.name}`, 'success'); }, { keys: 'Ctrl+Alt+Shift+S', enabled: has, hidden: false }),
-  C('file.place', 'Place image…', 'File', () => bus.emit('pick-image', { asObject: workspace.active?.doc.kind !== 'drawing' }), { enabled: has }),
+  C('file.place', 'Place image…', 'File', () => bus.emit('pick-image', {}), { enabled: has }),
   C('file.print', 'Print…', 'File', async ({ ed }) => { if (!ed) return; const { printDocument } = await import('../io/print'); await printDocument(ed); }, { keys: 'Ctrl+P', enabled: has }),
   C('file.info', 'Document properties…', 'File', () => openDialog('doc-info'), { enabled: has }),
   C('file.rename', 'Rename document…', 'File', () => openDialog('rename'), { enabled: has }),
@@ -84,7 +84,7 @@ async function pasteFromSystem(ed: Editor) {
     const items = await navigator.clipboard.read();
     for (const it of items) {
       const type = it.types.find((t) => t.startsWith('image/'));
-      if (type) { const blob = await it.getType(type); await R.placeImageBlob(ed, blob, 'Pasted image', { asObject: ed.doc.kind !== 'drawing' }); return; }
+      if (type) { const blob = await it.getType(type); await R.placeImageBlob(ed, blob, 'Pasted image'); return; }
     }
     const text = await navigator.clipboard.readText();
     if (text.trim()) {
@@ -203,8 +203,7 @@ reg(
   C('page.prev', 'Previous page', 'Page', ({ ed }) => ed?.goToPage(ed.pageIndex - 1), { keys: 'PageUp', enabled: has }),
   C('page.first', 'First page', 'Page', ({ ed }) => ed?.goToPage(0), { keys: 'Home', enabled: has, hidden: true }),
   C('page.last', 'Last page', 'Page', ({ ed }) => ed?.goToPage((ed?.doc.pages.length ?? 1) - 1), { keys: 'End', enabled: has, hidden: true }),
-  C('page.bookmark', 'Bookmark page', 'Page', ({ ed }) => ed && P.toggleBookmark(ed), { keys: 'Ctrl+B', enabled: has }),
-  C('page.setup', 'Page background & template…', 'Page', () => openDialog('page-setup'), { enabled: has }),
+  C('page.setup', 'Page background…', 'Page', () => openDialog('page-setup'), { enabled: has }),
   C('page.goto', 'Go to page…', 'Page', ({ ed }) => ed && prompt('Go to page', [{ key: 'n', label: `Page (1–${ed.doc.pages.length})`, min: 1, max: ed.doc.pages.length, value: ed.pageIndex + 1 }], (v) => ed.goToPage(v.n - 1)), { keys: 'Ctrl+Shift+P', enabled: has }),
 );
 for (const [mode, label] of [['single', 'Single page'], ['vertical', 'Continuous (vertical)'], ['horizontal', 'Horizontal strip'], ['spread', 'Two-page spread'], ['grid', 'Grid overview'], ['free', 'Free canvas (artboards)']] as const)
@@ -236,14 +235,10 @@ reg(
   C('view.checker', 'Transparency checkerboard', 'View', () => prefs.set((p) => ({ checker: !p.checker })), { checked: () => prefs.get().checker }),
   C('view.fullscreen', 'Full screen', 'View', () => { if (document.fullscreenElement) void document.exitFullscreen(); else void document.documentElement.requestFullscreen(); }, { keys: 'F11' }),
   C('view.focus', 'Focus mode (hide panels)', 'View', () => { const p = prefs.get(); const hide = p.rightDock || p.leftSidebar; prefs.set({ rightDock: !hide, leftSidebar: !hide }); }, { keys: 'Tab' }),
-  C('view.present', 'Present…', 'View', () => openDialog('present'), { enabled: has }),
 );
 
-// ---------------------------------------------------------------- Window / workspace
+// ---------------------------------------------------------------- Window
 reg(
-  C('ws.studio', 'Studio workspace (drawing & painting)', 'Workspace', () => { prefs.set({ workspace: 'studio' }); bus.emit('workspace', { name: 'studio' }); }, { keys: 'Ctrl+Alt+1', checked: () => prefs.get().workspace === 'studio' }),
-  C('ws.notes', 'Notes workspace (handwriting)', 'Workspace', () => { prefs.set({ workspace: 'notes' }); bus.emit('workspace', { name: 'notes' }); }, { keys: 'Ctrl+Alt+2', checked: () => prefs.get().workspace === 'notes' }),
-  C('ws.reader', 'Reader workspace (PDF annotate)', 'Workspace', () => { prefs.set({ workspace: 'reader' }); bus.emit('workspace', { name: 'reader' }); }, { keys: 'Ctrl+Alt+3', checked: () => prefs.get().workspace === 'reader' }),
   C('theme.dark', 'Theme: Dark', 'Window', () => prefs.set({ theme: 'dark' }), { checked: () => prefs.get().theme === 'dark' }),
   C('theme.light', 'Theme: Light', 'Window', () => prefs.set({ theme: 'light' }), { checked: () => prefs.get().theme === 'light' }),
   C('theme.midnight', 'Theme: Midnight', 'Window', () => prefs.set({ theme: 'midnight' }), { checked: () => prefs.get().theme === 'midnight' }),
@@ -254,7 +249,6 @@ reg(
   C('panel.history', 'Panel: History', 'Window', () => bus.emit('toggle-panel', { id: 'history' })),
   C('panel.navigator', 'Panel: Navigator', 'Window', () => bus.emit('toggle-panel', { id: 'navigator' })),
   C('panel.pages', 'Panel: Pages', 'Window', () => bus.emit('toggle-panel', { id: 'pages' })),
-  C('panel.search', 'Find in document', 'Window', () => bus.emit('toggle-panel', { id: 'search' }), { keys: 'Ctrl+F' }),
   C('panel.assets', 'Panel: Libraries & assets', 'Window', () => bus.emit('toggle-panel', { id: 'assets' })),
 );
 
@@ -285,13 +279,6 @@ function perspectivePoints(ed: Editor, n: number, horizon: number) {
   return pts;
 }
 function bumpSize(ed: Editor, dir: number) {
-  const ink = ed.toolId.startsWith('ink-') || ed.toolId === 'highlighter';
-  if (ink) {
-    const kind = ed.opts.inkKind, pf = ed.opts.inkPrefs[kind];
-    const s = Math.max(1, Math.round(pf.size * (dir > 0 ? 1.15 : 1 / 1.15) + dir * 0.5));
-    ed.setToolOpts({ inkPrefs: { ...ed.opts.inkPrefs, [kind]: { ...pf, size: s } } });
-    return;
-  }
   const s = ed.brush.size, n = Math.max(1, Math.round(s * (dir > 0 ? 1.12 : 1 / 1.12) + dir));
   ed.setBrush({ size: Math.min(1500, n) });
 }

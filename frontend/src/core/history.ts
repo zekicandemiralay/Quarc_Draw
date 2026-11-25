@@ -19,7 +19,7 @@ export class History {
   private redoStack: HistoryEntry[] = [];
   readonly events = new Emitter<{ change: void }>();
   maxEntries = 300;
-  maxBytes = 600 * 1024 * 1024;
+  maxBytes = 300 * 1024 * 1024; // a tablet's browser is killed long before 600 MB of undo data pays off
   /** monotonically increases on every committed change (used for dirty tracking) */
   revision = 0;
   /** revision at last save */

@@ -37,7 +37,8 @@ function LayerThumb({ ed, layer, mask }: { ed: Editor; layer: Layer; mask?: bool
       } catch { /* thumbnails are best-effort */ }
     }, 60);
     return () => clearTimeout(t);
-  }, [ed, layer, mask, ver, layer.type === 'raster' ? layer.surface.version : 0, layer.mask?.version]);
+    // a pixel layer's thumbnail only changes with its own pixels — redrawing every layer's after each stroke wasted a lot of time
+  }, [ed, layer, mask, !mask && layer.type === 'raster' ? 0 : ver, layer.type === 'raster' ? layer.surface.version : 0, layer.mask?.version]);
   if (layer.type === 'adjustment' && !mask) return <div className="thumb"><Icon name="sliders" size={16} /></div>;
   if (layer.type === 'group' && !mask) return <div className="thumb"><Icon name="group" size={16} /></div>;
   return <div className={`thumb ${mask ? 'mask' : ''} ${mask && ed.editingMask && ed.activeLayerId === layer.id ? 'on' : ''}`}><canvas ref={ref} /></div>;
@@ -82,7 +83,7 @@ function LayerRow({ ed, layer, depth, dnd }: { ed: Editor; layer: Layer; depth: 
       {layer.type === 'group' && layer.expanded && [...layer.children].reverse().map((c) => <LayerRow key={c.id} ed={ed} layer={c} depth={depth + 1} dnd={dnd} />)}
       {layer.type === 'vector' && expanded && [...objs].reverse().slice(0, 200).map((o) => (
         <div key={o.id} className={`object-row ${ed.objSel.includes(o.id) ? 'on' : ''}`} style={{ marginLeft: depth * 14 }} onClick={() => { ed.setActiveLayer(layer.id); ed.objSel = [o.id]; ed.changed('objsel'); }}>
-          <Icon name={o.type === 'text' ? 'text' : o.type === 'ink' ? 'pen-nib' : o.type === 'image' ? 'image' : o.type === 'group' ? 'group' : 'rect'} size={13} />
+          <Icon name={o.type === 'text' ? 'text' : o.type === 'image' ? 'image' : o.type === 'group' ? 'group' : 'rect'} size={13} />
           <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{objectLabel(o)}</span>
         </div>
       ))}

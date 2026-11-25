@@ -201,7 +201,7 @@ export function placeCanvasAsLayer(ed: Editor, canvas: HTMLCanvasElement, name: 
   return layer;
 }
 
-/** Place a decoded image: as a vector image object (notes/reader) or a raster layer (studio). Scales down to fit page. */
+/** Place a decoded image as a raster layer (or, with `asObject`, a vector image object). Scales down to fit the page. */
 export async function placeImageBlob(ed: Editor, blob: Blob, name = 'Image', opts: { asObject?: boolean; at?: { x: number; y: number } } = {}) {
   const c = await blobToCanvas(blob);
   const pg = ed.page;

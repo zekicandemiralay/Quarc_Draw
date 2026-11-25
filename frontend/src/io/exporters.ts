@@ -8,7 +8,6 @@ import { renderPageToCanvas } from '../core/render';
 import { canvasToBlob, createCanvas, ctx2d, sanitizeFilename } from '../core/util';
 import { serializeDoc } from './qdraw';
 import { pageToSvg } from './svg';
-import { getPdfSource, PDF_DPI } from '../pdf/pdfSource';
 import { getAssetBlob } from '../core/assets';
 
 export type ExportFormat = 'png' | 'jpeg' | 'webp' | 'avif' | 'bmp' | 'ico' | 'gif' | 'svg' | 'pdf' | 'psd' | 'ora' | 'qdraw';
@@ -20,10 +19,9 @@ export interface ExportOptions {
   transparent: boolean;
   background: string;       // used for JPEG / BMP / non-transparent export
   fps: number;              // animated GIF
-  pdfMode: 'pages' | 'annotated-original';
   bundle: 'auto' | 'zip';
 }
-export const defaultExportOptions = (): ExportOptions => ({ format: 'png', scope: 'page', scale: 1, quality: 0.92, transparent: true, background: '#ffffff', fps: 4, pdfMode: 'pages', bundle: 'auto' });
+export const defaultExportOptions = (): ExportOptions => ({ format: 'png', scope: 'page', scale: 1, quality: 0.92, transparent: true, background: '#ffffff', fps: 4, bundle: 'auto' });
 
 export const FORMAT_INFO: Record<ExportFormat, { label: string; ext: string; mime: string; lossy?: boolean; alpha?: boolean; layered?: boolean; vector?: boolean; desc: string }> = {
   png: { label: 'PNG', ext: 'png', mime: 'image/png', alpha: true, desc: 'Lossless with transparency — best for art and web.' },
@@ -34,7 +32,7 @@ export const FORMAT_INFO: Record<ExportFormat, { label: string; ext: string; mim
   ico: { label: 'ICO', ext: 'ico', mime: 'image/x-icon', alpha: true, desc: 'Multi-size Windows icon (16–256 px).' },
   gif: { label: 'GIF', ext: 'gif', mime: 'image/gif', alpha: true, desc: 'Single image, or an animation with one frame per page.' },
   svg: { label: 'SVG', ext: 'svg', mime: 'image/svg+xml', alpha: true, vector: true, desc: 'Scalable vector graphics (pixel layers are embedded).' },
-  pdf: { label: 'PDF', ext: 'pdf', mime: 'application/pdf', vector: false, desc: 'Multi-page document; annotate-and-export for PDFs.' },
+  pdf: { label: 'PDF', ext: 'pdf', mime: 'application/pdf', vector: false, desc: 'Print-ready document, one page per artboard.' },
   psd: { label: 'PSD', ext: 'psd', mime: 'image/vnd.adobe.photoshop', layered: true, alpha: true, desc: 'Photoshop file with layers.' },
   ora: { label: 'OpenRaster', ext: 'ora', mime: 'image/openraster', layered: true, alpha: true, desc: 'Open layered format (Krita, GIMP, MyPaint).' },
   qdraw: { label: 'Quarc Draw', ext: 'qdraw', mime: 'application/vnd.quarc.draw+zip', layered: true, alpha: true, desc: 'Native project with everything editable.' },
@@ -109,7 +107,7 @@ function renderForExport(ed: Editor, page: Page, o: ExportOptions, region?: { x:
   // transparent export: drop the plain page colour if it is just the default paper colour
   if (page.background.color) {
     const t = renderPageToCanvas(ed.doc, page, o.scale, { skipBackground: true, region });
-    if (!page.background.template && page.background.pdfPage === null && !page.background.image) return t;
+    if (!page.background.image) return t;
   }
   return c;
 }
@@ -189,23 +187,11 @@ const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 export async function exportPDF(ed: Editor, pages: Page[], o: ExportOptions): Promise<Blob> {
   const { PDFDocument } = await import('pdf-lib');
   const doc = ed.doc;
-  const src = getPdfSource(doc.id);
   const out = await PDFDocument.create();
   const ptPerUnit = 72 / doc.dpi;
   for (const page of pages) {
     const wPt = page.width * ptPerUnit, hPt = page.height * ptPerUnit;
-    if (o.pdfMode === 'annotated-original' && src && page.background.pdfPage !== null) {
-      // original PDF page + our annotation layers as a transparent overlay
-      const srcDoc = await PDFDocument.load(src.bytes, { ignoreEncryption: true });
-      const [copied] = await out.copyPages(srcDoc, [page.background.pdfPage]);
-      out.addPage(copied);
-      const overlay = renderPageToCanvas(doc, page, Math.max(1, o.scale) * 2, { skipBackground: true, transparentBackground: true });
-      if (isBlank(overlay)) continue;
-      const png = await out.embedPng(await (await canvasToBlob(overlay)).arrayBuffer());
-      const pg = out.getPage(out.getPageCount() - 1);
-      const { width, height } = pg.getSize();
-      pg.drawImage(png, { x: 0, y: 0, width, height });
-    } else {
+    {
       const p = out.addPage([wPt, hPt]);
       const c = renderForExport(ed, page, { ...o, transparent: false }, undefined);
       const useJpeg = o.format === 'pdf' && o.quality < 1 && !page.layers.some((l) => l.visible && l.type === 'raster' && false);
@@ -216,13 +202,6 @@ export async function exportPDF(ed: Editor, pages: Page[], o: ExportOptions): Pr
   }
   out.setTitle(doc.title); out.setProducer('Quarc Draw'); out.setCreator('Quarc Draw');
   return new Blob([(await out.save()) as BlobPart], { type: 'application/pdf' });
-}
-function isBlank(c: HTMLCanvasElement): boolean {
-  const d = ctx2d(c, true).getImageData(0, 0, c.width, c.height).data;
-  for (let i = 3; i < d.length; i += 16) if (d[i]) return false;
-  // finer check on the remaining pixels
-  for (let i = 3; i < d.length; i += 4) if (d[i]) return false;
-  return true;
 }
 
 // ------------------------------------------------------------ main entry
@@ -297,4 +276,4 @@ async function resolveAssetUrls(svg: string): Promise<string> {
   placeholder.clear();
   return out;
 }
-void walkLayers; void PDF_DPI;
+void walkLayers;

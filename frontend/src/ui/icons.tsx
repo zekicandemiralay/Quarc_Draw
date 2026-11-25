@@ -50,7 +50,6 @@ const P: Record<string, ReactNode> = {
   strike: <><path d="M5 12h14M16.5 7C15.5 5.5 14 5 12 5c-2.5 0-4 1.2-4 3 0 4 8 2.5 8 7 0 1.8-1.6 3-4 3-2.2 0-3.8-.8-4.5-2.5" /></>,
   squiggle: <><path d="M3 16c1.5-2 3-2 4.5 0s3 2 4.5 0 3-2 4.5 0 3 2 4.5 0M7 5v7M17 5v7M7 8.5h10" opacity=".9" /></>,
   'text-select': <><path d="M9 4H6a2 2 0 00-2 2v3M15 4h3a2 2 0 012 2v3M9 20H6a2 2 0 01-2-2v-3M15 20h3a2 2 0 002-2v-3M8 12h8M12 8v8" /></>,
-  laser: <><circle cx="12" cy="12" r="3" fill="currentColor" /><circle cx="12" cy="12" r="7" opacity=".5" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" /></>,
   // ----- ui
   undo: <><path d="M9 14L4 9l5-5" /><path d="M4 9h10a6 6 0 010 12h-3" /></>,
   redo: <><path d="M15 14l5-5-5-5" /><path d="M20 9H10a6 6 0 000 12h3" /></>,
@@ -83,7 +82,6 @@ const P: Record<string, ReactNode> = {
   grid: <><path d="M3 3h18v18H3zM9 3v18M15 3v18M3 9h18M3 15h18" /></>,
   page: <><rect x="5" y="3" width="14" height="18" rx="1.5" /><path d="M9 8h6M9 12h6M9 16h3" /></>,
   pages: <><rect x="8" y="3" width="12" height="15" rx="1.5" /><path d="M4 7v12a2 2 0 002 2h10" /></>,
-  bookmark: <><path d="M6 3h12v18l-6-4.5L6 21z" /></>,
   cloud: <><path d="M7 18a4 4 0 01-.5-7.97A6 6 0 0118 9.5 4.3 4.3 0 0117.5 18z" /></>,
   'cloud-off': <><path d="M3 3l18 18M7 18a4 4 0 01-.5-7.97c.3-.8.7-1.5 1.3-2.1M10 6.2A6 6 0 0118 9.5a4.3 4.3 0 011.8 7.4" /></>,
   sync: <><path d="M20 11a8 8 0 00-14.5-3.5M4 4v4h4M4 13a8 8 0 0014.5 3.5M20 20v-4h-4" /></>,
@@ -106,7 +104,6 @@ const P: Record<string, ReactNode> = {
   'file-plus': <><path d="M6 3h8l5 5v13H6z" /><path d="M14 3v5h5M12 12v6M9 15h6" /></>,
   present: <><rect x="3" y="4" width="18" height="12" rx="1.5" /><path d="M12 16v4M8 20h8" /></>,
   record: <><circle cx="12" cy="12" r="7" /><circle cx="12" cy="12" r="3" fill="currentColor" /></>,
-  signature: <><path d="M3 17c2-5 3-9 5-9s0 6 2 6 2-4 4-4 1 4 3 4h4M3 21h18" /></>,
   swap: <><path d="M7 4L3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7" /></>,
   circle: <><circle cx="12" cy="12" r="9" /></>,
   dot: <><circle cx="12" cy="12" r="2" fill="currentColor" /></>,

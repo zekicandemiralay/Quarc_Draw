@@ -1,11 +1,11 @@
-// Application shell: titlebar, tabs, workspaces, panels, global input handling.
+// Application shell: titlebar, document tabs, tool strip, panels, global input handling.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useWorkspace, workspace } from '../app/workspace';
-import { prefs, Workspace } from '../app/store';
+import { prefs } from '../app/store';
 import { bus, openDialog, toast } from '../app/bus';
 import { commandForKeys, eventToKeys, runCommand } from '../app/commands';
-import { TOOL_CATALOG, TOOLBARS, toolMeta } from '../tools/catalog';
+import { TOOL_CATALOG, TOOLBAR, toolMeta } from '../tools/catalog';
 import { Icon } from './icons';
 import { MenuBar } from './MenuBar';
 import { Toolbar } from './Toolbar';
@@ -19,7 +19,7 @@ import { BrushesPanel } from './panels/BrushesPanel';
 import { HistoryPanel, NavigatorPanel } from './panels/HistoryNavPanels';
 import { PropertiesPanel } from './panels/PropertiesPanel';
 import { AssetsPanel } from './panels/AssetsPanel';
-import { PagesPanel, OutlinePanel, SearchPanel, AnnotationsPanel } from './panels/SidePanels';
+import { PagesPanel } from './panels/SidePanels';
 import type { Editor } from '../editor/editor';
 import { useEditor } from '../editor/editor';
 import { openFiles, placeImages, pickFiles } from '../app/actions';
@@ -40,16 +40,11 @@ const PANELS: Record<PanelId, { title: string; icon: string; render: (ed: Editor
   properties: { title: 'Properties', icon: 'sliders', render: (ed) => <PropertiesPanel ed={ed} /> },
   assets: { title: 'Libraries', icon: 'library', render: (ed) => <AssetsPanel ed={ed} /> },
 };
-const DOCKS: Record<Workspace, { top: PanelId[]; bottom?: PanelId }> = {
-  studio: { top: ['color', 'brushes', 'properties', 'assets', 'navigator', 'history'], bottom: 'layers' },
-  notes: { top: ['properties', 'color', 'layers', 'assets', 'history'] },
-  reader: { top: ['properties', 'color', 'layers', 'assets'] },
-};
-const DEFAULT_TOOL: Record<Workspace, string> = { studio: 'brush', notes: 'ink-pen', reader: 'markup-highlight' };
+const DOCK: { top: PanelId[]; bottom: PanelId } = { top: ['color', 'brushes', 'properties', 'assets', 'navigator', 'history'], bottom: 'layers' };
 
-// tool shortcut map per workspace: key → tool ids
-function toolKeyMap(ws: Workspace): Map<string, string[]> {
-  const ids = new Set(TOOLBARS[ws].flat());
+// tool shortcut map: key → tool ids
+function toolKeyMap(): Map<string, string[]> {
+  const ids = new Set(TOOLBAR.flat());
   const m = new Map<string, string[]>();
   for (const t of TOOL_CATALOG) { if (!t.key || t.key.startsWith('Ctrl') || !ids.has(t.id)) continue; m.set(t.key.toLowerCase(), [...(m.get(t.key.toLowerCase()) ?? []), t.id]); }
   return m;
@@ -58,14 +53,12 @@ function toolKeyMap(ws: Workspace): Map<string, string[]> {
 export function App() {
   const ws = useWorkspace();
   const ed = ws.active;
-  const wsName = prefs.useSelect((p) => p.workspace);
   const theme = prefs.useSelect((p) => p.theme);
   const leftSidebar = prefs.useSelect((p) => p.leftSidebar);
   const rightDock = prefs.useSelect((p) => p.rightDock);
   const tutorialSeen = prefs.useSelect((p) => p.tutorialSeen);
   const [showLibrary, setShowLibrary] = useState(true);
-  const [dockTab, setDockTab] = useState<Record<string, PanelId>>({ studio: 'color', notes: 'properties', reader: 'properties' });
-  const [sideTab, setSideTab] = useState<'pages' | 'outline' | 'search' | 'annotations'>('pages');
+  const [dockTab, setDockTab] = useState<PanelId>('color');
   const [drag, setDrag] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const pendingImage = useRef<{ asObject?: boolean } | null>(null);
@@ -81,28 +74,17 @@ export function App() {
   // first-run tour
   useEffect(() => { if (!tutorialSeen && ws.editors.length === 1) { openDialog('tutorial'); prefs.set({ tutorialSeen: true }); } }, [ws.editors.length, tutorialSeen]);
 
-  // workspace change → valid tool
-  useEffect(() => {
-    const e = workspace.active;
-    if (!e) return;
-    const valid = new Set(TOOLBARS[wsName].flat());
-    if (!valid.has(e.toolId)) e.setTool(DEFAULT_TOOL[wsName]);
-  }, [wsName, ws.activeId]);
-
   // bus: panels / file picker
   useEffect(() => {
     const offs = [
       bus.on('toggle-panel', ({ id }) => {
         if (id === 'library') { setShowLibrary((v) => !v); return; }
-        if (['pages', 'outline', 'search', 'annotations'].includes(id)) { prefs.set({ leftSidebar: true }); if (prefs.get().workspace === 'studio') { /* sidebar is available in all workspaces for search */ } setSideTab(id as any); return; }
+        if (id === 'pages') { prefs.set({ leftSidebar: true }); return; }
         prefs.set({ rightDock: true });
-        const cur = prefs.get().workspace;
-        const dock = DOCKS[cur];
-        if (dock.bottom === id) return;
-        if (dock.top.includes(id as PanelId)) setDockTab((t) => ({ ...t, [cur]: id as PanelId }));
+        if (DOCK.bottom === id) return;
+        if (DOCK.top.includes(id as PanelId)) setDockTab(id as PanelId);
       }),
       bus.on('pick-image', async (o) => { const files = await pickFiles('image/*', true); const e = workspace.active; if (e && files.length) await placeImages(e, files); void o; }),
-      bus.on('workspace', () => { /* handled via prefs */ }),
     ];
     return () => offs.forEach((o) => o());
   }, []);
@@ -115,11 +97,6 @@ export function App() {
       if (document.querySelector('.scrim')) return; // a dialog is open
       const cur = workspace.active;
       if (e.key === ' ' && !e.repeat && cur) { cur.spaceDown = true; e.preventDefault(); return; }
-      if (cur?.presentation) {
-        if (e.key === 'Escape') { cur.presentation = false; cur.changed('status'); if (document.fullscreenElement) void document.exitFullscreen(); return; }
-        if (e.key === 'ArrowRight' || e.key === 'PageDown') { cur.goToPage(cur.pageIndex + 1); e.preventDefault(); return; }
-        if (e.key === 'ArrowLeft' || e.key === 'PageUp') { cur.goToPage(cur.pageIndex - 1); e.preventDefault(); return; }
-      }
       if (cur && cur.tool.keyDown(e)) { e.preventDefault(); return; }
       const spec = eventToKeys(e);
       if (!spec) return;
@@ -128,7 +105,7 @@ export function App() {
       if (cmd) { e.preventDefault(); runCommand(cmd.id, cur); return; }
       if (!cur || e.ctrlKey || e.metaKey || e.altKey) return;
       // tool shortcuts (cycle through tools sharing a key)
-      const tk = toolKeyMap(prefs.get().workspace).get(spec.toLowerCase());
+      const tk = toolKeyMap().get(spec.toLowerCase());
       if (tk) { const i = tk.indexOf(cur.toolId); cur.setTool(tk[(i + 1) % tk.length]); e.preventDefault(); return; }
       // number keys: opacity
       if (/^[0-9]$/.test(e.key) && !e.shiftKey) { const v = e.key === '0' ? 1 : parseInt(e.key) / 10; if (['brush', 'eraser'].includes(cur.toolId)) cur.setBrush({ opacity: v }); e.preventDefault(); }
@@ -148,7 +125,7 @@ export function App() {
       e.preventDefault();
       const items = Array.from(e.clipboardData?.items ?? []);
       const img = items.find((i) => i.type.startsWith('image/'));
-      if (img) { const f = img.getAsFile(); if (f) { await placeImageBlob(cur, f, 'Pasted image', { asObject: cur.doc.kind !== 'drawing' }); return; } }
+      if (img) { const f = img.getAsFile(); if (f) { await placeImageBlob(cur, f, 'Pasted image'); return; } }
       const text = e.clipboardData?.getData('text/plain');
       if (pasteInternal(cur)) return;
       if (text?.trim()) createTextObject(cur, text);
@@ -182,27 +159,15 @@ export function App() {
     window.addEventListener('beforeunload', h); return () => window.removeEventListener('beforeunload', h);
   }, []);
 
-  const setWs = (w: Workspace) => { prefs.set({ workspace: w }); };
-  const presentation = !!ed?.presentation;
-  useEditor(ed, ['status'], () => ed?.presentation);
-
-  const dock = DOCKS[wsName];
-  const activeTop = dock.top.includes(dockTab[wsName]) ? dockTab[wsName] : dock.top[0];
-  const showSidebar = leftSidebar && ed && !showLibrary && (wsName !== 'studio' || ed.doc.pages.length > 1 || sideTab === 'search') && !presentation;
-  const sideTabs: { id: typeof sideTab; icon: string; title: string }[] = [{ id: 'pages', icon: 'pages', title: 'Pages' }, { id: 'outline', icon: 'list', title: 'Outline & bookmarks' }, { id: 'search', icon: 'search', title: 'Find' }, { id: 'annotations', icon: 'note', title: 'Annotations' }];
+  const activeTop = dockTab;
+  const showSidebar = leftSidebar && ed && !showLibrary && ed.doc.pages.length > 1;
 
   return (
     <div className="app">
-      {!presentation && (
+      {(
         <div className="titlebar">
           <div className="brand" onClick={() => setShowLibrary(true)} title="Documents library"><img src="/logo.png" alt="" /><span>Quarc <b>Draw</b></span></div>
           <MenuBar ed={ed} />
-          <div className="spacer" />
-          <div className="ws-switch" role="tablist" aria-label="Workspace">
-            {([['studio', 'Studio', 'palette'], ['notes', 'Notes', 'pen-nib'], ['reader', 'Reader', 'file']] as const).map(([id, label, icon]) => (
-              <button key={id} className={wsName === id ? 'on' : ''} onClick={() => setWs(id)} title={`${label} workspace`}><Icon name={icon} size={14} />{label}</button>
-            ))}
-          </div>
           <div className="spacer" />
           <button className="btn ghost icon" title="Undo (Ctrl+Z)" disabled={!ed?.history.canUndo} onClick={() => ed?.undo()}><Icon name="undo" size={16} /></button>
           <button className="btn ghost icon" title="Redo (Ctrl+Shift+Z)" disabled={!ed?.history.canRedo} onClick={() => ed?.redo()}><Icon name="redo" size={16} /></button>
@@ -212,11 +177,11 @@ export function App() {
           <button className="btn ghost icon" title="Preferences" onClick={() => openDialog('prefs')}><Icon name="settings" size={16} /></button>
         </div>
       )}
-      {!presentation && (
+      {(
         <div className="tabs">
           {ws.editors.map((e) => (
             <div key={e.id} className={`tab ${e.id === ws.activeId && !showLibrary ? 'on' : ''}`} onClick={() => { workspace.setActive(e.id); setShowLibrary(false); }} onAuxClick={() => workspace.close(e)}>
-              <Icon name={e.doc.kind === 'pdf' ? 'file' : e.doc.kind === 'notebook' ? 'page' : e.doc.kind === 'whiteboard' ? 'present' : 'palette'} size={14} />
+              <Icon name="palette" size={14} />
               <span className="name">{e.doc.title}</span>{e.dirty && <span className="dirty" title="Unsaved changes" />}
               <button className="x" aria-label="Close" onClick={(ev) => { ev.stopPropagation(); void workspace.close(e); }}><Icon name="close" size={12} /></button>
             </div>
@@ -224,47 +189,30 @@ export function App() {
           <button className="btn ghost icon sm tab-add" title="New (Ctrl+N)" onClick={() => openDialog('new')}><Icon name="plus" size={15} /></button>
         </div>
       )}
-      {ed && !showLibrary && !presentation ? <OptionsBar ed={ed} /> : <div />}
+      {ed && !showLibrary ? <OptionsBar ed={ed} /> : <div />}
       <div className="main" style={{ position: 'relative' }}>
-        {ed && !presentation && <Toolbar ed={ed} />}
+        {ed && <Toolbar ed={ed} />}
         {showSidebar && (
-          <div className={`sidebar ${sideTab === 'pages' ? '' : 'wide'}`}>
-            <div className="side-tabs">{sideTabs.map((t) => <button key={t.id} className={sideTab === t.id ? 'on' : ''} title={t.title} onClick={() => setSideTab(t.id)}><Icon name={t.icon} size={16} /></button>)}</div>
-            {sideTab === 'pages' && <PagesPanel ed={ed!} />}
-            {sideTab === 'outline' && <OutlinePanel ed={ed!} />}
-            {sideTab === 'search' && <SearchPanel ed={ed!} />}
-            {sideTab === 'annotations' && <AnnotationsPanel ed={ed!} />}
+          <div className="sidebar">
+            <PagesPanel ed={ed!} />
           </div>
         )}
         {ed ? <CanvasView key={ed.id} ed={ed} /> : <div className="welcome" />}
-        {ed && rightDock && !presentation && (
+        {ed && rightDock && (
           <div className="dock">
             <div className="dock-tabs">
-              {dock.top.map((id) => <button key={id} className={`dock-tab ${activeTop === id ? 'on' : ''}`} onClick={() => setDockTab((t) => ({ ...t, [wsName]: id }))} title={PANELS[id].title}><Icon name={PANELS[id].icon} size={14} />{dock.top.length <= 5 || activeTop === id ? PANELS[id].title : ''}</button>)}
+              {DOCK.top.map((id) => <button key={id} className={`dock-tab ${activeTop === id ? 'on' : ''}`} onClick={() => setDockTab(id)} title={PANELS[id].title}><Icon name={PANELS[id].icon} size={14} />{activeTop === id ? PANELS[id].title : ''}</button>)}
             </div>
-            <div className="panel" style={{ flex: dock.bottom ? '0 0 auto' : 1, overflowY: 'auto', maxHeight: dock.bottom ? '48%' : undefined }}><div className="panel-b" style={{ paddingTop: 10 }}>{PANELS[activeTop].render(ed)}</div></div>
-            {dock.bottom && <div className="panel fill"><div className="panel-h"><Icon name={PANELS[dock.bottom].icon} size={14} /><span className="grow">{PANELS[dock.bottom].title}</span></div><div className="panel-b">{PANELS[dock.bottom].render(ed)}</div></div>}
+            <div className="panel" style={{ flex: '0 0 auto', overflowY: 'auto', maxHeight: '48%' }}><div className="panel-b" style={{ paddingTop: 10 }}>{PANELS[activeTop].render(ed)}</div></div>
+            <div className="panel fill"><div className="panel-h"><Icon name={PANELS[DOCK.bottom].icon} size={14} /><span className="grow">{PANELS[DOCK.bottom].title}</span></div><div className="panel-b">{PANELS[DOCK.bottom].render(ed)}</div></div>
           </div>
         )}
         {showLibrary && <Library onClose={() => { if (ws.editors.length) setShowLibrary(false); }} />}
-        {presentation && ed && <PresentationBar ed={ed} />}
       </div>
-      {!presentation && <StatusBar ed={ed} />}
+      <StatusBar ed={ed} />
       <DialogHost /><Toasts /><CommandPalette /><ContextMenu />
       {drag && <div className="drop-overlay">Drop to open — or onto the canvas to place images</div>}
       <input ref={fileRef} type="file" style={{ display: 'none' }} />
-    </div>
-  );
-}
-
-function PresentationBar({ ed }: { ed: Editor }) {
-  const n = useEditor(ed, ['page'], () => ed.pageIndex);
-  return (
-    <div className="page-nav pill" style={{ zIndex: 50, bottom: 18 }}>
-      <button onClick={() => ed.goToPage(n - 1)}><Icon name="chevron-left" size={16} /></button>
-      <span>{n + 1} / {ed.doc.pages.length}</span>
-      <button onClick={() => ed.goToPage(n + 1)}><Icon name="chevron-right" size={16} /></button>
-      <button title="Exit (Esc)" onClick={() => { ed.presentation = false; ed.changed('status'); if (document.fullscreenElement) void document.exitFullscreen(); }}><Icon name="close" size={15} /></button>
     </div>
   );
 }

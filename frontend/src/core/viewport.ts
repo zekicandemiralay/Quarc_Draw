@@ -115,7 +115,7 @@ export class Viewport {
     for (const p of doc.pages) {
       const r = this.pageRects.get(p.id);
       if (!r) continue;
-      if (p.infinite || rectIntersects(vis, r)) res.push({ page: p, rect: r });
+      if (rectIntersects(vis, r)) res.push({ page: p, rect: r });
     }
     return res;
   }
@@ -125,7 +125,7 @@ export class Viewport {
       const r = this.pageRects.get(p.id);
       if (!r) return null;
       const local = { x: w.x - r.x, y: w.y - r.y };
-      if (p.infinite || (local.x >= 0 && local.y >= 0 && local.x <= r.w && local.y <= r.h)) return { page: p, local };
+      if (local.x >= 0 && local.y >= 0 && local.x <= r.w && local.y <= r.h) return { page: p, local };
       return null;
     };
     if (prefer) { const h = hit(prefer); if (h) return h; }

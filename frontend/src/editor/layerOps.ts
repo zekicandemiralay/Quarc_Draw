@@ -182,7 +182,7 @@ export function flattenPage(ed: Editor) {
   flat.surface.setFromCanvas(canvas);
   ed.transact('Flatten image', () => {
     ed.page.layers = [flat];
-    ed.page.background = { ...ed.page.background, color: null, template: null, pdfPage: null, image: null };
+    ed.page.background = { ...ed.page.background, color: null, image: null };
   }, { pages: [ed.page.id] });
   ed.setActiveLayer(flat.id);
 }

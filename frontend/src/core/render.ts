@@ -8,7 +8,6 @@ import { blendToComposite } from './model';
 import { drawObject } from './vector';
 import { acquire, release } from './canvaspool';
 import { composeWithEffects, hasActiveEffects } from './effects';
-import { drawTemplate } from './templates';
 import { applyAdjustment } from '../filters/pixels';
 import { getImageSync } from './assets';
 import { cssColor } from './vector';
@@ -34,14 +33,11 @@ export interface RenderOpts {
   hiddenLayers?: Set<string>;
   /** only draw this layer (solo / per-layer export) */
   onlyLayer?: string;
+  /** draw only `page.layers.slice(from, to)` — lets the viewport render the layers under a brush stroke once and cache them */
+  layerRange?: [number, number | undefined];
   /** extra drawing after a given layer (used by tools to preview floating content) */
   afterLayer?: { layerId: string; draw: (ctx: CanvasRenderingContext2D) => void };
 }
-
-/** Hook so the PDF module can supply rendered page bitmaps without core depending on pdf.js */
-export const hooks: {
-  pdfPage: (doc: QDocument, page: Page, scale: number) => HTMLCanvasElement | null;
-} = { pdfPage: () => null };
 
 let rendersInFlight = 0;
 
@@ -50,14 +46,12 @@ export function renderPage(ctx: CanvasRenderingContext2D, doc: QDocument, page: 
   try {
     ctx.save();
     setCtxMat(ctx, o.matrix);
-    if (!page.infinite) {
-      ctx.beginPath(); ctx.rect(0, 0, page.width, page.height); ctx.clip();
-    }
+    ctx.beginPath(); ctx.rect(0, 0, page.width, page.height); ctx.clip();
     ctx.imageSmoothingEnabled = o.scale < 3;
     ctx.imageSmoothingQuality = 'high';
     if (!o.skipBackground) drawBackground(ctx, doc, page, o);
     // the page clip stays active for the layers (device-space clip survives setTransform)
-    renderLayerList(ctx, doc, page, page.layers, o);
+    renderLayerList(ctx, doc, page, o.layerRange ? page.layers.slice(o.layerRange[0], o.layerRange[1]) : page.layers, o);
     ctx.restore();
   } finally { rendersInFlight--; }
 }
@@ -65,9 +59,8 @@ export function renderPage(ctx: CanvasRenderingContext2D, doc: QDocument, page: 
 function drawBackground(ctx: CanvasRenderingContext2D, doc: QDocument, page: Page, o: RenderOpts) {
   const bg = page.background;
   const w = page.width, h = page.height;
-  const area = page.infinite ? { x: -1e5, y: -1e5, w: 2e5, h: 2e5 } : { x: 0, y: 0, w, h };
+  const area = { x: 0, y: 0, w, h };
   if (bg.color && !o.transparentBackground) { ctx.fillStyle = cssColor(bg.color); ctx.fillRect(area.x, area.y, area.w, area.h); }
-  else if (bg.color && o.transparentBackground && bg.pdfPage === null && !bg.template && !bg.image) { /* transparent export keeps bg only if not white default */ }
   if (bg.image) {
     const img = getImageSync(bg.image.assetId);
     if (img) {
@@ -76,12 +69,6 @@ function drawBackground(ctx: CanvasRenderingContext2D, doc: QDocument, page: Pag
       if (s === null) ctx.drawImage(img, 0, 0, w, h); else ctx.drawImage(img, (w - iw * s) / 2, (h - ih * s) / 2, iw * s, ih * s);
     }
   }
-  if (bg.pdfPage !== null) {
-    const bmp = hooks.pdfPage(doc, page, o.scale);
-    if (bmp) ctx.drawImage(bmp, 0, 0, w, h);
-    else { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h); }
-  }
-  if (bg.template && !page.infinite) drawTemplate(ctx, bg.template, w, h, o.scale);
 }
 
 function renderLayerList(ctx: CanvasRenderingContext2D, doc: QDocument, page: Page, layers: Layer[], o: RenderOpts) {
