@@ -175,6 +175,26 @@ export async function studio({ page, rep, shot, assert, helpers: h }) {
     await shot('16-text');
   });
 
+  await rep.step('text tool: a click starts a box limited by the page, so long text wraps (core/textBox.ts)', async () => {
+    await h.reset(page); await h.ev(page, (ed) => { ed.setTool('text'); ed.setFg('#222222'); });
+    await h.click(page, [-250, -60]);
+    await page.waitForSelector('textarea[data-text-editor]');
+    await page.keyboard.type('A long line of text that has to wrap at the edge of the page instead of running off to the right without end, which is what it used to do.');
+    const ta = await page.$eval('textarea[data-text-editor]', (t) => ({ ws: getComputedStyle(t).whiteSpace, sw: t.scrollWidth, cw: t.clientWidth }));
+    assert(ta.ws === 'pre-wrap' && ta.sw <= ta.cw + 2, `the editor wraps while typing ${JSON.stringify(ta)}`);
+    await shot('16a-text-wraps');
+    await page.keyboard.press('Control+Enter'); await page.waitForTimeout(150);
+    const o = await h.ev(page, (ed) => { const t = ed.page.layers.find((l) => l.type === 'vector').objects[0]; return { boxW: t.boxW, x: t.x, align: t.align, pageW: ed.page.width }; });
+    assert(o.align === 'left' && o.boxW !== null && Math.abs(o.x + o.boxW - (o.pageW - 16)) < 2, `a box ending just inside the page's right edge ${JSON.stringify(o)}`);
+    // A drag still sets the width by hand.
+    await h.ev(page, (ed) => ed.setTool('move')); await h.ev(page, (ed) => ed.setTool('text'));
+    await h.drag(page, [-300, 150], [-100, 150]);
+    await page.waitForSelector('textarea[data-text-editor]');
+    await page.keyboard.type('dragged'); await page.keyboard.press('Control+Enter'); await page.waitForTimeout(150);
+    const d = await h.ev(page, (ed) => ed.page.layers.find((l) => l.type === 'vector').objects.find((t) => t.text === 'dragged')?.boxW);
+    assert(d && d < o.boxW / 2, `a dragged box keeps the dragged width (${d})`);
+  });
+
   await rep.step('gradient tool + filter dialog (gaussian blur) + adjustment (invert)', async () => {
     await h.reset(page); await h.ev(page, (ed) => { ed.setFg('#ff006e'); ed.setBg('#3a86ff'); ed.setToolOpts({ gradientUseFgBg: true, gradientKind: 'linear' }); ed.setTool('gradient'); });
     await h.drag(page, [-300, -200], [300, 200]);

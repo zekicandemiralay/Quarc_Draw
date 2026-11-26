@@ -9,6 +9,7 @@ import { addObject, updateObjects, deleteObjects } from '../editor/objectOps';
 import { pickObjectAt } from './moveTools';
 import { paintColor } from '../core/vector';
 import { uid } from '../core/util';
+import { newTextBox } from '../core/textBox';
 
 export class TextTool extends Tool {
   id = 'text'; name = 'Text';
@@ -34,9 +35,11 @@ export class TextTool extends Tool {
     const hit = pickObjectAt(ed, e.local);
     if (hit && hit.type === 'text') { this.editObject(hit.id); return; }
     const o = ed.opts;
+    // A click starts a box limited by the page, so the text wraps (core/textBox.ts); a drag sets it by hand (pointerMove).
+    const box = newTextBox(e.local.x, o.textAlign, e.page.width, o.font.size);
     const t: VText = {
-      ...baseObject(), id: uid('ob'), type: 'text', x: e.local.x, y: e.local.y, text: '', font: { ...o.font }, align: o.textAlign,
-      lineHeight: o.lineHeight, letterSpacing: o.letterSpacing, boxW: null, underline: o.textUnderline, strike: o.textStrike,
+      ...baseObject(), id: uid('ob'), type: 'text', x: box.x, y: e.local.y, text: '', font: { ...o.font }, align: o.textAlign,
+      lineHeight: o.lineHeight, letterSpacing: o.letterSpacing, boxW: box.boxW, underline: o.textUnderline, strike: o.textStrike,
       fill: solid(ed.fg), stroke: null,
     };
     this.dragStart = { x: e.local.x, y: e.local.y };

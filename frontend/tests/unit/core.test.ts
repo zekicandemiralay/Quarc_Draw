@@ -276,3 +276,20 @@ describe('view rotation detents', () => {
     expect(normAngle(d(-540))).toBeCloseTo(Math.PI, 9);
   });
 });
+
+describe('new text box (a click with the text tool)', async () => {
+  const { newTextBox } = await import('../../src/core/textBox');
+  it('left-aligned: from the click to the page edge, so the text wraps there', () => {
+    expect(newTextBox(100, 'left', 800, 20)).toEqual({ x: 100, boxW: 800 - 100 - 16 });
+  });
+  it('never narrower than a few words, even at the edge', () => {
+    expect(newTextBox(780, 'left', 800, 20)).toEqual({ x: 780, boxW: 160 });
+    expect(newTextBox(780, 'left', 800, 48).boxW).toBe(384);
+  });
+  it('centred text is centred on the click; right-aligned text ends at it', () => {
+    const c = newTextBox(300, 'center', 800, 20);
+    expect(c.x + c.boxW / 2).toBe(300);
+    expect(c).toEqual({ x: 16, boxW: 568 });
+    expect(newTextBox(500, 'right', 800, 20)).toEqual({ x: 16, boxW: 484 });
+  });
+});
